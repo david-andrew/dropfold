@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "prezip": "bun run build",
+    "zip": "bash scripts/zip.sh",
     "preview": "vite preview"
   },
   "devDependencies": {
