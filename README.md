@@ -19,5 +19,14 @@ You can generate the build artifact for itch.io via
 bun run zip
 ```
 
+### template setup
+
+for reference if I ever want to make a vanilla typescript app
+```bash
+bun create vite@latest dropfold --template vanilla-ts
+cd dropfold
+bun install
+```
+
 ## About
 Submission for the GMTK Game Jam 2024. Made from scratch with three.js (no bundlers!)

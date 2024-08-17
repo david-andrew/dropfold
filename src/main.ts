@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+// Find the div with id 'GameView'
+const gameView = document.getElementById('GameView') as HTMLDivElement;
 
 type SceneFunctions = { 
     update_scene: (renderer:THREE.WebGLRenderer) => void, 
@@ -8,7 +10,7 @@ type SceneFunctions = {
 const main = () => {
     const renderer = new THREE.WebGLRenderer();
     renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
+    gameView.appendChild(renderer.domElement);
 
     const { update_scene, camera } = paper_folding_scene(); //rotating_cube_scene();
     const on_resize = () => {

@@ -1,22 +1,19 @@
 {
   "name": "dropfold",
+  "private": true,
   "version": "0.0.0",
-  "main": "index.js",
+  "type": "module",
   "scripts": {
-    "build": "bash scripts/build.sh",
-    "prezip": "bun run build",
-    "zip": "bash scripts/zip.sh",
-    "dev": "bash scripts/dev.sh"
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
-  "dependencies": {
+  "devDependencies": {
     "@types/three": "^0.167.1",
-    "chokidar-cli": "^3.0.0",
-    "live-server": "^1.2.2",
-    "three": "^0.167.1",
-    "typescript": "^5.5.4"
+    "typescript": "^5.5.3",
+    "vite": "^5.4.1"
+  },
+  "dependencies": {
+    "three": "^0.167.1"
   }
 }
