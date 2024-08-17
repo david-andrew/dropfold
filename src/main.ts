@@ -1,9 +1,11 @@
 import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
 // Find the div with id 'GameView'
 const gameView = document.getElementById('GameView') as HTMLDivElement;
 
 type SceneFunctions = { 
-    update_scene: (renderer:THREE.WebGLRenderer) => void, 
+    update_scene: () => void, 
     camera: THREE.PerspectiveCamera,
 }
 
@@ -12,7 +14,7 @@ const main = () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
     gameView.appendChild(renderer.domElement);
 
-    const { update_scene, camera } = paper_folding_scene(); //rotating_cube_scene();
+    const { update_scene, camera } = paper_folding_scene(renderer); //rotating_cube_scene();
     const on_resize = () => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
@@ -20,7 +22,7 @@ const main = () => {
 
     const animate = () => {
         requestAnimationFrame(animate);
-        update_scene(renderer);
+        update_scene();
     }
     animate();
 
@@ -31,23 +33,66 @@ const main = () => {
     });
 }
 
-const paper_folding_scene = (): SceneFunctions => {
+const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctions => {
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 
+    // Paper setup
     const geometry = new THREE.BoxGeometry(8.5, 11, 0.01);
     const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
     const paper = new THREE.Mesh(geometry, material);
-
     scene.add(paper);
 
-    camera.position.z = 10;
+    // Red sphere setup
+    const sphereGeometry = new THREE.SphereGeometry(0.2, 32, 32);
+    const sphereMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+    sphere.visible = false; // Initially hide the sphere
+    scene.add(sphere);
 
-    const update_scene = (renderer:THREE.WebGLRenderer) => {
+    // Set up raycaster and mouse vector
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+
+
+    // set up click to orbit    
+    camera.position.z = 15;
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.update();
+
+
+      // Mouse move event
+      const onMouseMove = (event: MouseEvent) => {
+        // Calculate mouse position in normalized device coordinates (-1 to +1)
+        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+        // Update the raycaster with the camera and mouse position
+        raycaster.setFromCamera(mouse, camera);
+
+        // Check for intersections with the paper mesh
+        const intersects = raycaster.intersectObject(paper);
+
+        if (intersects.length > 0 && !event.buttons) {
+            const intersect = intersects[0];
+            sphere.position.copy(intersect.point);
+            sphere.visible = true; // Show the sphere when over the paper
+        } else {
+            sphere.visible = false; // Hide the sphere when not over the paper
+        }
+    }
+
+    // Add mouse move listener
+    window.addEventListener('mousemove', onMouseMove);
+
+
+
+
+    const update_scene = () => {
         //TODO: replace with click to orbit
-        // paper.rotation.x += 0.01;
-        // paper.rotation.y += 0.01;
-
+        controls.enabled = !sphere.visible;
+        controls.update();
         renderer.render(scene, camera);
     }
 
@@ -56,7 +101,7 @@ const paper_folding_scene = (): SceneFunctions => {
 
 
 
-const rotating_cube_scene = (): SceneFunctions => {
+const rotating_cube_scene = (renderer:THREE.WebGLRenderer): SceneFunctions => {
     // Create a scene
     const scene = new THREE.Scene();
 
@@ -74,7 +119,7 @@ const rotating_cube_scene = (): SceneFunctions => {
     // Position the camera so that we can see the cube
     camera.position.z = 5;
 
-    const update_scene = (renderer:THREE.WebGLRenderer) => {
+    const update_scene = () => {
         // Rotate the cube for some simple animation
         cube.rotation.x += 0.01;
         cube.rotation.y += 0.01;
