@@ -1,5 +1,6 @@
-# builds folder
+# builds folders
 dist/
+builds/
 
 # node modules
 node_modules/

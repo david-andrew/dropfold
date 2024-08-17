@@ -5,7 +5,7 @@
   "scripts": {
     "build": "bash scripts/build.sh",
     "prezip": "bun run build",
-    "zip": "bash scrips/zip.sh",
+    "zip": "bash scripts/zip.sh",
     "dev": "bash scripts/dev.sh"
   },
   "keywords": [],

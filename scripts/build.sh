@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # build in tmp folder
 bunx tsc
 sed -i '1s|.*|import * as THREE from "./three.module.min.js";|' tmp/index.js
