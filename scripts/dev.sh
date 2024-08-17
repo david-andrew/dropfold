@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 # initial build, 
 bun run build
 

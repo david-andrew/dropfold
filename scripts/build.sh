@@ -1,5 +1,8 @@
 #!/bin/bash
 
+set -e
+set -o xtrace
+
 # build in tmp folder
 mkdir -p tmp
 bunx tsc
