@@ -1,1 +1,5 @@
-# watch any .ts files and rebuild if they change
+#!/bin/bash
+
+bun run build
+bunx chokidar-cli './src/**/*' -c 'bun run build' &
+npx node scripts/dev-server.js
