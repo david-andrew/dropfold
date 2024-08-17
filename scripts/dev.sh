@@ -7,4 +7,4 @@ bun run build
 bunx chokidar-cli './src/**/*' -c 'bun run build' &
 
 # serve the build files (reloading on changes)
-npx node scripts/dev-server.js
+bunx node scripts/dev-server.js
