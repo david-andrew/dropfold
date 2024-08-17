@@ -1,0 +1,1 @@
+# watch any .ts files and rebuild if they change
