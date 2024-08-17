@@ -33,4 +33,4 @@ jobs:
               uses: peaceiris/actions-gh-pages@v3
               with:
                   github_token: ${{ secrets.GITHUB_TOKEN }} # Uses a token provided by Actions
-                  publish_dir: ./out # Directory to push to gh-pages, adjust if your output directory is different
+                  publish_dir: ./dist # Directory to push to gh-pages, adjust if your output directory is different
