@@ -9,7 +9,7 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 // Create a simple box geometry and a basic material and combine them into a mesh
 const geometry = new THREE.BoxGeometry();
-const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+const material = new THREE.MeshBasicMaterial({ color: 0x00ffff });
 const cube = new THREE.Mesh(geometry, material);
 // Add the cube to the scene
 scene.add(cube);
