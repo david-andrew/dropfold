@@ -62,29 +62,46 @@ const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctions => {
     controls.update();
 
 
-      // Mouse move event
-      const onMouseMove = (event: MouseEvent) => {
-        // Calculate mouse position in normalized device coordinates (-1 to +1)
-        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
-        // Update the raycaster with the camera and mouse position
-        raycaster.setFromCamera(mouse, camera);
-
-        // Check for intersections with the paper mesh
-        const intersects = raycaster.intersectObject(paper);
-
-        if (intersects.length > 0 && !event.buttons) {
-            const intersect = intersects[0];
-            sphere.position.copy(intersect.point);
-            sphere.visible = true; // Show the sphere when over the paper
-        } else {
-            sphere.visible = false; // Hide the sphere when not over the paper
-        }
+    type MouseState = {
+        x: number,
+        y: number,
+        pressed: boolean,
+    }
+    let mouseState = { x: 0, y: 0, pressed: false }
+    // mouse pressed event
+    const onMousePressed = (event: MouseEvent) => {
+        mouseState.pressed = true;
     }
 
-    // Add mouse move listener
+    const onMouseReleased = (event: MouseEvent) => {
+        mouseState.pressed = false;
+    }
+
+    // Mouse move event
+    const onMouseMove = (event: MouseEvent) => {
+      // Calculate mouse position in normalized device coordinates (-1 to +1)
+      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+      // Update the raycaster with the camera and mouse position
+      raycaster.setFromCamera(mouse, camera);
+
+      // Check for intersections with the paper mesh
+      const intersects = raycaster.intersectObject(paper);
+
+      if (intersects.length > 0) {
+          const intersect = intersects[0];
+          sphere.position.copy(intersect.point);
+          sphere.visible = true; // Show the sphere when over the paper
+      } else {
+          sphere.visible = false; // Hide the sphere when not over the paper
+      }
+    }
+
+    // Add mouse event listener
     window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mousedown', onMousePressed);
+    window.addEventListener('mouseup', onMouseReleased);
 
 
 
