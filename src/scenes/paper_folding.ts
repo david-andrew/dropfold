@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { SceneFunctions } from '../main';
 import { Vector2 as vec2, Vector3 as vec3 } from 'three';
+import { clamp } from 'three/src/math/MathUtils.js';
 
 // type vec3 = THREE.Vector3
 // type vec2 = THREE.Vector2
@@ -15,28 +16,28 @@ class Shape {
     // TODO: maybe have tf: THREE.Matrix4
     verts: Array<vert>
     edges: Array<edge>
-    // geometry: THREE.ExtrudeGeometry
+    shape: THREE.Shape
     prism: THREE.Mesh
     outline: THREE.LineSegments
     group: THREE.Group
 
     constructor(verts: Array<[number, number]>) {
         this.verts = verts.map(v => new THREE.Vector2(v[0], v[1]))
-        const shape = new THREE.Shape();
+        this.shape = new THREE.Shape();
         this.edges = []
-        shape.moveTo(this.verts[0].x, this.verts[0].y);
+        this.shape.moveTo(this.verts[0].x, this.verts[0].y);
         for (let i = 1; i < verts.length; i++) {
-            shape.lineTo(this.verts[i].x, this.verts[i].y);
+            this.shape.lineTo(this.verts[i].x, this.verts[i].y);
             this.edges.push({a: this.verts[i-1], b: this.verts[i]})
         }
-        shape.lineTo(this.verts[0].x, this.verts[0].y); // Close the shape
+        this.shape.lineTo(this.verts[0].x, this.verts[0].y); // Close the shape
         const extrudeSettings = {
             steps: 1,
             depth: 0.01,  // How far to extrude the shape
             bevelEnabled: false  // Disable bevel for a sharp edge
         };
 
-        const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+        const geometry = new THREE.ExtrudeGeometry(this.shape, extrudeSettings);
         const material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
         this.prism = new THREE.Mesh(geometry, material);
 
@@ -134,13 +135,22 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
     sphere.visible = false; // Initially hide the sphere
     scene.add(sphere);
 
+
+    // blue sphere setup
+    const blueSphereGeometry = new THREE.SphereGeometry(0.2, 32, 32);
+    const blueSphereMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
+    const blueSphere = new THREE.Mesh(blueSphereGeometry, blueSphereMaterial);
+    blueSphere.visible = false; // Initially hide the sphere
+    scene.add(blueSphere);
+
+
     // Set up raycaster and mouse vector
     const raycaster = new THREE.Raycaster();
     const mouseman = new MouseManager()
     enum ClickMode { NONE, ORBIT, FOLD }
-    let click_mode = ClickMode.NONE
-    let intersect_point: vec3|null = null;
-    let intersect_mesh: THREE.Mesh|null = null;
+    let click_mode = ClickMode.NONE             // what the mouse is currently doing
+    let intersect_point: vec3|null = null;      //the point where the ray intersects the closest mesh
+    let intersect_mesh: THREE.Mesh|null = null; // the mesh that the ray intersects
 
 
 
@@ -171,6 +181,7 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
         }
         if (!mouseman.pressed) {
             sphere.visible = intersected;
+            blueSphere.visible = intersected;
         }
     }
     const updateClickMode = (pressed:boolean) => {
@@ -188,10 +199,42 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
         paper.material.color.set(0x00ff00)
     }
     const update_outlines = () => {
-        if (click_mode !== ClickMode.FOLD) {
-            const shape_idx = mesh_to_idx.get(intersect_mesh) ?? -1
-            shapes.forEach((shape, i) => shape.setOutline(i === shape_idx))
+        if (click_mode === ClickMode.FOLD) return
+        const shape_idx = mesh_to_idx.get(intersect_mesh) ?? -1
+        shapes.forEach((shape, i) => shape.setOutline(i === shape_idx))
+        
+    }
+    const update_closest_edge = () => {
+        if (click_mode === ClickMode.FOLD || intersect_mesh === null || intersect_point === null) return
+        const shape_idx = mesh_to_idx.get(intersect_mesh)
+        const shape = shapes[shape_idx]
+
+        const shapeVertices = shape.shape.getPoints(); // Get the original 2D points from the shape
+        const worldVertices: Array<vec3> = [];
+        
+        // Transform the 2D shape points to 3D
+        shapeVertices.forEach(vertex => {
+            const vector3D = new THREE.Vector3(vertex.x, vertex.y, 0); // Convert 2D point to 3D by adding a z-value of 0
+            vector3D.applyMatrix4(shape.prism.matrixWorld); // Apply the mesh's world transformation matrix to get the 3D position
+            worldVertices.push(vector3D);
+        });
+
+        let bestPoint = worldVertices[0];
+        const worldIntersect = intersect_point //intersect_point.clone().applyMatrix4(shape.prism.matrixWorld)
+        let bestDistance = bestPoint.distanceTo(worldIntersect);
+        console.log('break')
+        for (let i = 1; i < worldVertices.length + 1; i++) {
+            const V = worldVertices[i % worldVertices.length].clone().sub(worldVertices[i-1])
+            const W = worldIntersect.clone().sub(worldVertices[i-1])
+            const t = clamp(W.dot(V) / V.dot(V), 0, 1)
+            const closest = V.clone().multiplyScalar(t).add(worldVertices[i-1])
+            const distance = closest.distanceTo(worldIntersect)
+            if (distance < bestDistance) {
+                bestDistance = distance
+                bestPoint = closest
+            }
         }
+        blueSphere.position.copy(bestPoint)
     }
 
     window.addEventListener('mousemove', checkIntersect);
@@ -202,6 +245,9 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
     window.addEventListener('mouseup', update_outlines);
     window.addEventListener('mousedown', update_outlines);
     window.addEventListener('mousemove', update_outlines);
+    // window.addEventListener('mouseup', update_closest_edge);
+    // window.addEventListener('mousedown', update_closest_edge);
+    window.addEventListener('mousemove', update_closest_edge);
 
 
     const update_scene = () => {
