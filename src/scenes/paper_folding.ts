@@ -1,26 +1,61 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { SceneFunctions } from '../main';
+import { Vector2 as vec2, Vector3 as vec3 } from 'three';
 
-
-type vec3 = THREE.Vector3
-type vec2 = THREE.Vector2
-type vert = vec3
+// type vec3 = THREE.Vector3
+// type vec2 = THREE.Vector2
+type vert = vec2
 type edge = {
     a: vert
     b: vert
 }
 
-type Polygon = {
+class Shape {
+    // TODO: maybe have tf: THREE.Matrix4
     verts: Array<vert>
     edges: Array<edge>
-}
+    // geometry: THREE.ExtrudeGeometry
+    prism: THREE.Mesh
+    outline: THREE.LineSegments
+    group: THREE.Group
 
-type Shape = {
+    constructor(verts: Array<[number, number]>) {
+        this.verts = verts.map(v => new THREE.Vector2(v[0], v[1]))
+        const shape = new THREE.Shape();
+        this.edges = []
+        shape.moveTo(this.verts[0].x, this.verts[0].y);
+        for (let i = 1; i < verts.length; i++) {
+            shape.lineTo(this.verts[i].x, this.verts[i].y);
+            this.edges.push({a: this.verts[i-1], b: this.verts[i]})
+        }
+        shape.lineTo(this.verts[0].x, this.verts[0].y); // Close the shape
+        const extrudeSettings = {
+            steps: 1,
+            depth: 0.01,  // How far to extrude the shape
+            bevelEnabled: false  // Disable bevel for a sharp edge
+        };
+
+        const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+        const material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+        this.prism = new THREE.Mesh(geometry, material);
+
+        const edgesGeometry = new THREE.EdgesGeometry(geometry);
+        const edgesMaterial = new THREE.LineBasicMaterial({ color: 0x00ffff, linewidth: 2 }); // Faint blue outline
+        this.outline = new THREE.LineSegments(edgesGeometry, edgesMaterial);
+
+        this.group = new THREE.Group()
+        this.group.add(this.prism)
+        this.group.add(this.outline)
+    }
+
+    toggleOutline() {
+        this.outline.visible = !this.outline.visible;
+    }
 }
 
 const shapes: Array<Shape> = []
-const shape_map: Map<Shape, number> = new Map<Shape, number>()
+const shape_to_idx: Map<Shape, number> = new Map<Shape, number>()
 
 
 class MouseManager {
@@ -44,6 +79,9 @@ class MouseManager {
         this.pos.y = -(event.clientY / window.innerHeight) * 2 + 1;
     }
 }
+
+
+
 
 const test_shape = () => {
     // Step 1: Define the 2D Shape (polygon)
@@ -109,9 +147,12 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
     const paper = new THREE.Mesh(geometry, material);
     scene.add(paper);
 
-    const {prism, outline, toggleOutline} = test_shape()
-    scene.add(prism)
-    scene.add(outline)
+    for (let i = 0; i < 10; i++) {
+        const shape = new Shape([[-1,1], [1,1], [1,-1]])
+        shape.group.position.z = i
+        scene.add(shape.group)
+    }
+
 
     // Red sphere setup
     const sphereGeometry = new THREE.SphereGeometry(0.2, 32, 32);
