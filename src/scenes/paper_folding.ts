@@ -157,13 +157,14 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
     const paper = new THREE.Mesh(geometry, material);
     // scene.add(paper);
 
-    // for (let i = 1; i < 10; i++) {
-    //     const shape = new Shape([[-1,1], [1,1], [1,-1]])
-    //     shape.group.position.z = i
-    //     shapes.push(shape)
-    // }
     shapes.push(new Shape([[-8.5/2, 11/2], [8.5/2, 11/2], [8.5/2, -11/2], [-8.5/2, -11/2]]))
     shapes[0].group.position.z = -0.1
+    for (let i = 1; i < 10; i++) {
+        const shape = new Shape([[-1,1], [1,1], [1,-1], [-1,-1]])
+        shape.group.position.z = i
+        shape.group.position.x = i
+        shapes.push(shape)
+    }
     shapes.forEach(shape => scene.add(shape.group))
     sync_shapes()
     sync_mesh_map()
@@ -214,6 +215,7 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
 
     // Mouse move event
     const checkIntersect = (event: MouseEvent) => {
+        if (intersect_mesh !== null) intersect_mesh.visible = true;
         // if (click_mode === ClickMode.FOLD) return
 
         // Update the raycaster with the camera and mouse position
@@ -299,6 +301,7 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
     const draw_dividing_line = () => {
         if (intersect_point === null || intersect_mesh === null || !blueSphere.visible || !redSphere.visible) return
         dividingLine.visible = true;
+        intersect_mesh.visible = false; //TODO where do we set this visible again
         // determine the point on the dividing plane:
         const point = redSphere.position.clone().add(blueSphere.position).divideScalar(2)
         const direction = blueSphere.position.clone().sub(redSphere.position).normalize()
@@ -360,6 +363,8 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
     window.addEventListener('mousemove', update_outlines);
     window.addEventListener('mouseup', update_closest_edge);
     window.addEventListener('mousemove', update_closest_edge);
+    window.addEventListener('mousedown', draw_dividing_line);
+    window.addEventListener('mouseup', draw_dividing_line);
     window.addEventListener('mousemove', draw_dividing_line);
 
 
