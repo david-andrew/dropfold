@@ -4,6 +4,12 @@ import { SceneFunctions } from '../main';
 import { Vector2 as vec2, Vector3 as vec3 } from 'three';
 import { clamp } from 'three/src/math/MathUtils.js';
 
+
+import { Line2 } from 'three/examples/jsm/lines/Line2.js';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
+import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
+
+
 // type vec3 = THREE.Vector3
 // type vec2 = THREE.Vector2
 type vert = vec2
@@ -39,7 +45,7 @@ class Shape {
         };
 
         const geometry = new THREE.ExtrudeGeometry(this.shape, extrudeSettings);
-        const material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+        const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
         this.prism = new THREE.Mesh(geometry, material);
 
         const edgesGeometry = new THREE.EdgesGeometry(geometry);
@@ -115,13 +121,14 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
     geometry.translate(0, 0, -0.005); // Move the paper slightly back so it doesn't overlap with the shape
     const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
     const paper = new THREE.Mesh(geometry, material);
-    scene.add(paper);
+    // scene.add(paper);
 
-    for (let i = 0; i < 10; i++) {
-        const shape = new Shape([[-1,1], [1,1], [1,-1]])
-        shape.group.position.z = i
-        shapes.push(shape)
-    }
+    // for (let i = 0; i < 10; i++) {
+    //     const shape = new Shape([[-1,1], [1,1], [1,-1]])
+    //     shape.group.position.z = i
+    //     shapes.push(shape)
+    // }
+    shapes.push(new Shape([[-8.5/2, 11/2], [8.5/2, 11/2], [8.5/2, -11/2], [-8.5/2, -11/2]]))
     shapes.forEach(shape => scene.add(shape.group))
     sync_shapes()
     sync_mesh_map()
@@ -141,6 +148,18 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
     const blueSphere = new THREE.Mesh(blueSphereGeometry, blueSphereMaterial);
     blueSphere.visible = false; // Initially hide the sphere
     scene.add(blueSphere);
+
+
+    // dividing line setup
+    const lineGeometry = new LineGeometry();
+    lineGeometry.setPositions([0, 0, 0, 0, 0, 10]);
+    const lineMaterial = new LineMaterial({ color: 0xff00ff, linewidth: 5, dashed: true });
+    lineMaterial.resolution.set(window.innerWidth, window.innerHeight);
+    const line = new Line2(lineGeometry, lineMaterial);
+    line.visible = false;
+    scene.add(line);
+
+   
 
 
     // Set up raycaster and mouse vector
@@ -247,8 +266,7 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
     window.addEventListener('mouseup', update_outlines);
     window.addEventListener('mousedown', update_outlines);
     window.addEventListener('mousemove', update_outlines);
-    // window.addEventListener('mouseup', update_closest_edge);
-    // window.addEventListener('mousedown', update_closest_edge);
+    window.addEventListener('mouseup', update_closest_edge);
     window.addEventListener('mousemove', update_closest_edge);
 
 
