@@ -60,7 +60,7 @@ class Shape {
 
 
     setOutline(visible: boolean) {
-        this.outline_material.color.set(visible ? 0x00ffff : 0x000000)
+        this.outline_material.color.set(visible ? 0xffA000 : 0x000000)
     }
 }
 
@@ -106,7 +106,36 @@ class MouseManager {
 }
 
 
+const make_axis_helper = ({thickness = 10, length = 5} = {}) => {
+    // make a coordinate axis out of the line2. red is +x, green is +y, blue is +z
+    const group = new THREE.Group()
+    
+    // x axis
+    const xLineGeometry = new LineGeometry();
+    const xLineMaterial = new LineMaterial({ linewidth: thickness, color: 0xff0000 });
+    xLineMaterial.resolution.set(window.innerWidth, window.innerHeight);
+    const xline = new Line2(xLineGeometry, xLineMaterial);
+    xLineGeometry.setPositions([0, 0, 0, length, 0, 0]);
+    group.add(xline)
 
+    // y axis
+    const yLineGeometry = new LineGeometry();
+    const yLineMaterial = new LineMaterial({ linewidth: thickness, color: 0x00ff00 });
+    yLineMaterial.resolution.set(window.innerWidth, window.innerHeight);
+    const yline = new Line2(yLineGeometry, yLineMaterial);
+    yLineGeometry.setPositions([0, 0, 0, 0, length, 0]);
+    group.add(yline)
+
+    // z axis
+    const zLineGeometry = new LineGeometry();
+    const zLineMaterial = new LineMaterial({ linewidth: thickness, color: 0x0000ff });
+    zLineMaterial.resolution.set(window.innerWidth, window.innerHeight);
+    const zline = new Line2(zLineGeometry, zLineMaterial);
+    zLineGeometry.setPositions([0, 0, 0, 0, 0, length]);
+    group.add(zline)
+
+    return group
+}
 
 //     // scene.add(prism);
 //     return {prism, outline, toggleOutline}
@@ -114,7 +143,12 @@ class MouseManager {
 
 export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctions => {
     const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x87ceeb); // sky blue background
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+    // Create an AxesHelper
+    const axisHelper = make_axis_helper()
+    scene.add(axisHelper);
 
     // Paper setup
     const geometry = new THREE.BoxGeometry(8.5, 11, 0.01);
@@ -123,12 +157,13 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
     const paper = new THREE.Mesh(geometry, material);
     // scene.add(paper);
 
-    // for (let i = 0; i < 10; i++) {
+    // for (let i = 1; i < 10; i++) {
     //     const shape = new Shape([[-1,1], [1,1], [1,-1]])
     //     shape.group.position.z = i
     //     shapes.push(shape)
     // }
     shapes.push(new Shape([[-8.5/2, 11/2], [8.5/2, 11/2], [8.5/2, -11/2], [-8.5/2, -11/2]]))
+    shapes[0].group.position.z = -0.1
     shapes.forEach(shape => scene.add(shape.group))
     sync_shapes()
     sync_mesh_map()
@@ -137,9 +172,9 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
     // Red sphere setup
     const sphereGeometry = new THREE.SphereGeometry(0.2, 32, 32);
     const sphereMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-    const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-    sphere.visible = false; // Initially hide the sphere
-    scene.add(sphere);
+    const redSphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+    redSphere.visible = false; // Initially hide the sphere
+    scene.add(redSphere);
 
 
     // blue sphere setup
@@ -152,12 +187,12 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
 
     // dividing line setup
     const lineGeometry = new LineGeometry();
-    lineGeometry.setPositions([0, 0, 0, 0, 0, 10]);
-    const lineMaterial = new LineMaterial({ color: 0xff00ff, linewidth: 5, dashed: true });
+    lineGeometry.setPositions([-10, -10, 0, 10, 10, 0]);
+    const lineMaterial = new LineMaterial({ color: 0xff00ff, linewidth: 10, dashed: false });
     lineMaterial.resolution.set(window.innerWidth, window.innerHeight);
-    const line = new Line2(lineGeometry, lineMaterial);
-    line.visible = false;
-    scene.add(line);
+    const dividingLine = new Line2(lineGeometry, lineMaterial);
+    dividingLine.visible = false;
+    scene.add(dividingLine);
 
    
 
@@ -177,24 +212,26 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
     controls.update();
 
 
-
-
     // Mouse move event
     const checkIntersect = (event: MouseEvent) => {
+        // if (click_mode === ClickMode.FOLD) return
+
         // Update the raycaster with the camera and mouse position
         raycaster.setFromCamera(mouseman.pos, camera);
 
         // Check for intersections with the paper mesh
-        const intersects = raycaster.intersectObjects(meshes)
+        const intersects = raycaster.intersectObjects(click_mode === ClickMode.FOLD ? [intersect_mesh] : meshes)
 
         const intersected = intersects.length > 0;
         if (intersected) {
             intersect_point = intersects[0].point
             intersect_mesh = intersects[0].object as THREE.Mesh
-            sphere.position.copy(intersect_point);
+            redSphere.position.copy(intersect_point);
         } else {
-            intersect_point = null;
-            intersect_mesh = null;
+            if (click_mode !== ClickMode.FOLD) {
+                intersect_point = null;
+                intersect_mesh = null;
+            }
         }
         if (!mouseman.pressed) {
             // sphere.visible = intersected;
@@ -206,17 +243,20 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
         if (!pressed) {
             click_mode = ClickMode.NONE
             paper.material.color.set(0xffffff)
-            sphere.visible = false;
+            redSphere.visible = false;
+            dividingLine.visible = false;
             return;
         }
         if (intersect_point !== null) {
             click_mode = ClickMode.FOLD
             paper.material.color.set(0x0000ff)
-            sphere.visible = true;
+            redSphere.visible = true;
+            draw_dividing_line()
             return;
         }
         click_mode = ClickMode.ORBIT
-        sphere.visible = false;
+        redSphere.visible = false;
+        dividingLine.visible = false;
         paper.material.color.set(0x00ff00)
     }
     const update_outlines = () => {
@@ -243,7 +283,6 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
         let bestPoint = worldVertices[0];
         const worldIntersect = intersect_point //intersect_point.clone().applyMatrix4(shape.prism.matrixWorld)
         let bestDistance = bestPoint.distanceTo(worldIntersect);
-        console.log('break')
         for (let i = 1; i < worldVertices.length + 1; i++) {
             const V = worldVertices[i % worldVertices.length].clone().sub(worldVertices[i-1])
             const W = worldIntersect.clone().sub(worldVertices[i-1])
@@ -257,17 +296,71 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
         }
         blueSphere.position.copy(bestPoint)
     }
+    const draw_dividing_line = () => {
+        if (intersect_point === null || intersect_mesh === null || !blueSphere.visible || !redSphere.visible) return
+        dividingLine.visible = true;
+        // determine the point on the dividing plane:
+        const point = redSphere.position.clone().add(blueSphere.position).divideScalar(2)
+        const direction = blueSphere.position.clone().sub(redSphere.position).normalize()
+        // console.log(direction)
+        
+        //for each edge on the intersected mesh, determine the point of intersection (if any) with the dividing plane
+        const shape_idx = mesh_to_idx.get(intersect_mesh)
+        const shape = shapes[shape_idx]
+        const shapeVertices = shape.shape.getPoints(); // Get the original 2D points from the shape
+        
+        // convert the direction to 2D by projecting the line into the mesh's frame
+        const inv_tf = new THREE.Matrix4().copy(intersect_mesh.matrixWorld).invert()
+        point.applyMatrix4(inv_tf)
+        direction.applyMatrix4(inv_tf).normalize()
+        const point2d = new vec2(point.x, point.y)
+        const direction2d = new vec2(direction.x, direction.y)
+        const perpdir = new vec2(-direction.y, direction.x)
+        const dividing_line_2d = {C: point2d, D: point2d.clone().add(perpdir)}
 
+        // determine which edges of the shape intersect the perpendicular line
+        const intersections: Array<vec2> = []
+        for (let i = 0; i < shapeVertices.length; i++) {
+            const A = shapeVertices[i]
+            const B = shapeVertices[(i + 1) % shapeVertices.length]
+            const intersection = getLineIntersection({A, B}, dividing_line_2d)
+            if (intersection !== null) {
+                intersections.push(intersection)
+            }
+        }
+        if (intersections.length < 2) {
+            dividingLine.visible = false;
+            return
+        }
+        if (intersections.length > 2) {
+            console.error("More than 2 intersections found")
+        }
+        
+        // convert intersections to world space
+        const p0 = new vec3(intersections[0].x, intersections[0].y, 0)
+        const p1 = new vec3(intersections[1].x, intersections[1].y, 0)
+        p0.applyMatrix4(intersect_mesh.matrixWorld)
+        p1.applyMatrix4(intersect_mesh.matrixWorld)
+
+        //debug
+        // dividingLine.geometry.setPositions([point.x, point.y, point.z, point.x + direction.x, point.y + direction.y, point.z + direction.z])
+        dividingLine.geometry.setPositions([p0.x, p0.y, p0.z, p1.x, p1.y, p1.z])
+        dividingLine.visible = true;
+        // const direction2d = new vec2(direction.x, direction.y)
+
+    }
+
+    window.addEventListener('mouseup', _ => updateClickMode(false) );
+    window.addEventListener('mousedown', _ => updateClickMode(true) );
     window.addEventListener('mousemove', checkIntersect);
     window.addEventListener('mouseup', checkIntersect);
     window.addEventListener('mousedown', checkIntersect);
-    window.addEventListener('mouseup', _ => updateClickMode(false) );
-    window.addEventListener('mousedown', _ => updateClickMode(true) );
     window.addEventListener('mouseup', update_outlines);
     window.addEventListener('mousedown', update_outlines);
     window.addEventListener('mousemove', update_outlines);
     window.addEventListener('mouseup', update_closest_edge);
     window.addEventListener('mousemove', update_closest_edge);
+    window.addEventListener('mousemove', draw_dividing_line);
 
 
     const update_scene = () => {
@@ -279,4 +372,38 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
     }
 
     return { update_scene, camera }
+}
+
+
+
+
+const getLineIntersection = (segment: {A: vec2, B: vec2}, line: {C: vec2, D: vec2}) => {
+    const {A, B} = segment
+    const {C, D} = line
+
+    // Calculate the direction vectors
+    const AB = new THREE.Vector2().subVectors(B, A);
+    const CD = new THREE.Vector2().subVectors(D, C);
+
+    // Calculate the denominator
+    const denominator = AB.x * CD.y - AB.y * CD.x;
+
+    // Lines are parallel if denominator is 0
+    if (denominator === 0) {
+        return null; // No intersection
+    }
+
+    // Calculate t and s
+    const AC = new THREE.Vector2().subVectors(C, A);
+    const t = (AC.x * CD.y - AC.y * CD.x) / denominator;
+    // const s = (AC.x * AB.y - AC.y * AB.x) / denominator; //don't use since CD is infinite in length
+
+    // Check if the intersection lies within the line segment
+    if (t >= 0 && t <= 1) {
+        // Calculate the intersection point
+        const intersection = A.clone().add(AB.multiplyScalar(t));
+        return intersection;
+    }
+
+    return null; // No intersection within the segment
 }
