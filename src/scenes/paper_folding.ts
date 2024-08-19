@@ -19,6 +19,7 @@ class Shape {
     shape: THREE.Shape
     prism: THREE.Mesh
     outline: THREE.LineSegments
+    outline_material: THREE.LineBasicMaterial
     group: THREE.Group
 
     constructor(verts: Array<[number, number]>) {
@@ -42,20 +43,18 @@ class Shape {
         this.prism = new THREE.Mesh(geometry, material);
 
         const edgesGeometry = new THREE.EdgesGeometry(geometry);
-        const edgesMaterial = new THREE.LineBasicMaterial({ color: 0x00ffff, linewidth: 1 }); // Faint blue outline
-        this.outline = new THREE.LineSegments(edgesGeometry, edgesMaterial);
-        this.outline.visible = false;
+        this.outline_material = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 1 }); // Faint blue outline
+        this.outline = new THREE.LineSegments(edgesGeometry, this.outline_material);
+        // this.outline.visible = false;
 
         this.group = new THREE.Group()
         this.group.add(this.prism)
         this.group.add(this.outline)
     }
 
-    toggleOutline() {
-        this.outline.visible = !this.outline.visible;
-    }
+
     setOutline(visible: boolean) {
-        this.outline.visible = visible
+        this.outline_material.color.set(visible ? 0x00ffff : 0x000000)
     }
 }
 
@@ -151,8 +150,7 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
     let click_mode = ClickMode.NONE             // what the mouse is currently doing
     let intersect_point: vec3|null = null;      //the point where the ray intersects the closest mesh
     let intersect_mesh: THREE.Mesh|null = null; // the mesh that the ray intersects
-
-
+    let would_sphere_be_visible = false;        // whether the sphere would be visible if the mouse was not pressed
 
     // set up click to orbit    
     camera.position.z = 15;
@@ -180,7 +178,8 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
             intersect_mesh = null;
         }
         if (!mouseman.pressed) {
-            sphere.visible = intersected;
+            // sphere.visible = intersected;
+            would_sphere_be_visible = intersected;
             blueSphere.visible = intersected;
         }
     }
@@ -252,7 +251,7 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
 
     const update_scene = () => {
         //TODO: replace with click to orbit
-        controls.enableRotate = !sphere.visible;
+        controls.enableRotate = !would_sphere_be_visible;
 
         controls.update();
         renderer.render(scene, camera);
