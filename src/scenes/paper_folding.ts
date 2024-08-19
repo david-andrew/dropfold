@@ -60,7 +60,7 @@ class Shape {
 
 
     setOutline(visible: boolean) {
-        this.outline_material.color.set(visible ? 0xffA000 : 0x000000)
+        this.outline_material.color.set(visible ? 0xff0000 : 0x000000)
     }
 }
 
@@ -328,7 +328,7 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
         
         // convert the direction to 2D by projecting the line into the mesh's frame
         const inv_tf = intersect_mesh.matrixWorld.clone().invert()
-        const localMidpoint = worldMidpoint.clone().applyMatrix4(inv_tf) ///GOOD
+        const localMidpoint = worldMidpoint.clone().applyMatrix4(inv_tf)
         const localBluePos = blueSphere.position.clone().applyMatrix4(inv_tf)
         const localRedPos = redSphere.position.clone().applyMatrix4(inv_tf)
 
