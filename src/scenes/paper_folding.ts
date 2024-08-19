@@ -4,6 +4,7 @@ import { SceneFunctions } from '../main';
 
 
 type vec3 = THREE.Vector3
+type vec2 = THREE.Vector2
 type vert = vec3
 type edge = {
     a: vert
@@ -15,6 +16,34 @@ type Polygon = {
     edges: Array<edge>
 }
 
+type Shape = {
+}
+
+const shapes: Array<Shape> = []
+const shape_map: Map<Shape, number> = new Map<Shape, number>()
+
+
+class MouseManager {
+    pos: vec2
+    pressed: boolean
+    constructor() {
+        this.pos = new THREE.Vector2()
+        this.pressed = false
+        window.addEventListener('mousemove', this.onMouseMove)
+        window.addEventListener('mousedown', this.onMousePressed)
+        window.addEventListener('mouseup', this.onMouseReleased)
+    }
+    onMousePressed: (event: MouseEvent) => void = (event: MouseEvent) => {
+        this.pressed = true
+    }
+    onMouseReleased: (event: MouseEvent) => void = (event: MouseEvent) => {
+        this.pressed = false
+    }
+    onMouseMove: (event: MouseEvent) => void = (event: MouseEvent) => {
+        this.pos.x = (event.clientX / window.innerWidth) * 2 - 1;
+        this.pos.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    }
+}
 
 const test_shape = () => {
     // Step 1: Define the 2D Shape (polygon)
@@ -93,7 +122,10 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
 
     // Set up raycaster and mouse vector
     const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
+    const mouseman = new MouseManager()
+    enum ClickMode { NONE, ORBIT, FOLD }
+    let click_mode = ClickMode.NONE
+    let intersect: vec3|null = null;
 
 
 
@@ -103,48 +135,47 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
     controls.update();
 
 
-    type MouseState = {
-        x: number,
-        y: number,
-        pressed: boolean,
-    }
-    let mouseState = { x: 0, y: 0, pressed: false }
-    // mouse pressed event
-    const onMousePressed = (event: MouseEvent) => {
-        mouseState.pressed = true;
-    }
 
-    const onMouseReleased = (event: MouseEvent) => {
-        mouseState.pressed = false;
-    }
 
     // Mouse move event
-    const onMouseMove = (event: MouseEvent) => {
-      // Calculate mouse position in normalized device coordinates (-1 to +1)
-      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    const checkIntersect = (event: MouseEvent) => {
+        // Update the raycaster with the camera and mouse position
+        raycaster.setFromCamera(mouseman.pos, camera);
 
-      // Update the raycaster with the camera and mouse position
-      raycaster.setFromCamera(mouse, camera);
+        // Check for intersections with the paper mesh
+        const intersects = raycaster.intersectObject(paper);
 
-      // Check for intersections with the paper mesh
-      const intersects = raycaster.intersectObject(paper);
-
-      if (intersects.length > 0) {
-          const intersect = intersects[0];
-          sphere.position.copy(intersect.point);
-          sphere.visible = true; // Show the sphere when over the paper
-      } else {
-          sphere.visible = false; // Hide the sphere when not over the paper
-      }
+        const intersected = intersects.length > 0;
+        if (intersected) {
+            intersect = intersects[0].point
+            sphere.position.copy(intersect);
+        } else {
+            intersect = null;
+        }
+        if (!mouseman.pressed) {
+            sphere.visible = intersected;
+        }
+        console.log(intersect)
     }
-
-    // Add mouse event listener
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mousedown', onMousePressed);
-    window.addEventListener('mouseup', onMouseReleased);
-
-
+    const updateClickMode = (pressed:boolean) => {
+        if (!pressed) {
+            click_mode = ClickMode.NONE
+            paper.material.color.set(0xffffff)
+            return;
+        }
+        if (intersect !== null) {
+            click_mode = ClickMode.FOLD
+            paper.material.color.set(0x0000ff)
+            return;
+        }
+        click_mode = ClickMode.ORBIT
+        paper.material.color.set(0x00ff00)
+    }
+    window.addEventListener('mousemove', checkIntersect);
+    window.addEventListener('mouseup', checkIntersect);
+    window.addEventListener('mousedown', checkIntersect);
+    window.addEventListener('mouseup', _ => updateClickMode(false) );
+    window.addEventListener('mousedown', _ => updateClickMode(true) );
 
 
 
