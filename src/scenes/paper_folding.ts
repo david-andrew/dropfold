@@ -137,9 +137,6 @@ const make_axis_helper = ({thickness = 10, length = 5} = {}) => {
     return group
 }
 
-//     // scene.add(prism);
-//     return {prism, outline, toggleOutline}
-// }
 
 export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctions => {
     const scene = new THREE.Scene();
@@ -163,6 +160,7 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
         const shape = new Shape([[-1,1], [1,1], [1,-1], [-1,-1]])
         shape.group.position.z = i
         shape.group.position.x = i
+        shape.group.rotation.y = Math.PI * i / 10
         shapes.push(shape)
     }
     shapes.forEach(shape => scene.add(shape.group))
@@ -184,6 +182,14 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
     const blueSphere = new THREE.Mesh(blueSphereGeometry, blueSphereMaterial);
     blueSphere.visible = false; // Initially hide the sphere
     scene.add(blueSphere);
+
+
+    // green sphere setup
+    const greenSphereGeometry = new THREE.SphereGeometry(0.2, 32, 32);
+    const greenSphereMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+    const greenSphere = new THREE.Mesh(greenSphereGeometry, greenSphereMaterial);
+    greenSphere.visible = false; // Initially hide the sphere
+    scene.add(greenSphere);
 
 
     // dividing line setup
@@ -299,13 +305,19 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
         blueSphere.position.copy(bestPoint)
     }
     const draw_dividing_line = () => {
+        greenSphere.visible = false;
         if (intersect_point === null || intersect_mesh === null || !blueSphere.visible || !redSphere.visible) return
         dividingLine.visible = true;
         intersect_mesh.visible = false; //TODO where do we set this visible again
         // determine the point on the dividing plane:
         const point = redSphere.position.clone().add(blueSphere.position).divideScalar(2)
+
+        /// DEBUG draw the green sphere here
+        greenSphere.position.copy(point)
+        greenSphere.visible = true;
+
         const direction = blueSphere.position.clone().sub(redSphere.position).normalize()
-        // console.log(direction)
+        console.log(direction)
         
         //for each edge on the intersected mesh, determine the point of intersection (if any) with the dividing plane
         const shape_idx = mesh_to_idx.get(intersect_mesh)
@@ -314,8 +326,10 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
         
         // convert the direction to 2D by projecting the line into the mesh's frame
         const inv_tf = new THREE.Matrix4().copy(intersect_mesh.matrixWorld).invert()
-        point.applyMatrix4(inv_tf)
-        direction.applyMatrix4(inv_tf).normalize()
+        const inv_rot = intersect_mesh.quaternion.clone().invert()
+        point.sub(intersect_mesh.position).applyMatrix4(inv_tf)
+        // direction.applyMatrix4(inv_tf).normalize()
+        direction.applyQuaternion(inv_rot).normalize()
         const point2d = new vec2(point.x, point.y)
         const direction2d = new vec2(direction.x, direction.y)
         const perpdir = new vec2(-direction.y, direction.x)
