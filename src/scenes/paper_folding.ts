@@ -41,8 +41,9 @@ class Shape {
         this.prism = new THREE.Mesh(geometry, material);
 
         const edgesGeometry = new THREE.EdgesGeometry(geometry);
-        const edgesMaterial = new THREE.LineBasicMaterial({ color: 0x00ffff, linewidth: 2 }); // Faint blue outline
+        const edgesMaterial = new THREE.LineBasicMaterial({ color: 0x00ffff, linewidth: 1 }); // Faint blue outline
         this.outline = new THREE.LineSegments(edgesGeometry, edgesMaterial);
+        this.outline.visible = false;
 
         this.group = new THREE.Group()
         this.group.add(this.prism)
@@ -52,10 +53,28 @@ class Shape {
     toggleOutline() {
         this.outline.visible = !this.outline.visible;
     }
+    setOutline(visible: boolean) {
+        this.outline.visible = visible
+    }
 }
 
 const shapes: Array<Shape> = []
-const shape_to_idx: Map<Shape, number> = new Map<Shape, number>()
+const meshes: Array<THREE.Mesh> = [] // for convenience. need to ensure always in sync with shapes
+const mesh_to_idx: Map<THREE.Mesh, number> = new Map<THREE.Mesh, number>()
+
+
+const sync_shapes = () => {
+    for (let i = 0; i < shapes.length; i++) {
+        const shape = shapes[i]
+        meshes[i] = shape.prism;
+        // mesh.position.z = shape.group.position.z
+    }
+}
+const sync_mesh_map = () => {
+    for (let i = 0; i < meshes.length; i++) {
+        mesh_to_idx.set(meshes[i], i)
+    }
+}
 
 
 class MouseManager {
@@ -83,58 +102,9 @@ class MouseManager {
 
 
 
-const test_shape = () => {
-    // Step 1: Define the 2D Shape (polygon)
-    const shape = new THREE.Shape();
-
-    // Start from a point
-    shape.moveTo(-1, -1);
-
-    // Define the rest of the polygon
-    shape.lineTo(1, -1);
-    shape.lineTo(1, 1);
-    shape.lineTo(-1, 1);
-    shape.lineTo(-1, -1); // Close the shape
-
-    // Step 2: Extrude the Shape into the third dimension
-    const extrudeSettings = {
-        steps: 1,
-        depth: 0.01,  // How far to extrude the shape
-        bevelEnabled: false  // Disable bevel for a sharp edge
-    };
-    const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-
-    // Step 3: Create a Mesh and add it to the scene
-    const material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
-    const prism = new THREE.Mesh(geometry, material);
-
-
-    // Step 3: Create the Outline
-    const edgesGeometry = new THREE.EdgesGeometry(geometry);
-    const edgesMaterial = new THREE.LineBasicMaterial({ color: 0x0000ff, linewidth: 1 }); // Faint blue outline
-    const outline = new THREE.LineSegments(edgesGeometry, edgesMaterial);
-    // scene.add(outline);
-
-    // Step 4: Toggle the Outline On/Off
-    let outlineVisible = true;
-    function toggleOutline() {
-        outlineVisible = !outlineVisible;
-        outline.visible = outlineVisible;
-    }
-
-    // // Example of toggling the outline on and off
-    // document.addEventListener('keydown', (event) => {
-    //     if (event.key === 'o') {  // Press 'o' to toggle outline
-    //         toggleOutline();
-    //     }
-    // });
-
-
-
-
-    // scene.add(prism);
-    return {prism, outline, toggleOutline}
-}
+//     // scene.add(prism);
+//     return {prism, outline, toggleOutline}
+// }
 
 export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctions => {
     const scene = new THREE.Scene();
@@ -150,9 +120,12 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
     for (let i = 0; i < 10; i++) {
         const shape = new Shape([[-1,1], [1,1], [1,-1]])
         shape.group.position.z = i
-        scene.add(shape.group)
+        shapes.push(shape)
     }
-
+    shapes.forEach(shape => scene.add(shape.group))
+    sync_shapes()
+    sync_mesh_map()
+    
 
     // Red sphere setup
     const sphereGeometry = new THREE.SphereGeometry(0.2, 32, 32);
@@ -166,7 +139,8 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
     const mouseman = new MouseManager()
     enum ClickMode { NONE, ORBIT, FOLD }
     let click_mode = ClickMode.NONE
-    let intersect: vec3|null = null;
+    let intersect_point: vec3|null = null;
+    let intersect_mesh: THREE.Mesh|null = null;
 
 
 
@@ -184,19 +158,20 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
         raycaster.setFromCamera(mouseman.pos, camera);
 
         // Check for intersections with the paper mesh
-        const intersects = raycaster.intersectObject(paper);
+        const intersects = raycaster.intersectObjects(meshes)
 
         const intersected = intersects.length > 0;
         if (intersected) {
-            intersect = intersects[0].point
-            sphere.position.copy(intersect);
+            intersect_point = intersects[0].point
+            intersect_mesh = intersects[0].object as THREE.Mesh
+            sphere.position.copy(intersect_point);
         } else {
-            intersect = null;
+            intersect_point = null;
+            intersect_mesh = null;
         }
         if (!mouseman.pressed) {
             sphere.visible = intersected;
         }
-        console.log(intersect)
     }
     const updateClickMode = (pressed:boolean) => {
         if (!pressed) {
@@ -204,7 +179,7 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
             paper.material.color.set(0xffffff)
             return;
         }
-        if (intersect !== null) {
+        if (intersect_point !== null) {
             click_mode = ClickMode.FOLD
             paper.material.color.set(0x0000ff)
             return;
@@ -212,12 +187,21 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
         click_mode = ClickMode.ORBIT
         paper.material.color.set(0x00ff00)
     }
+    const update_outlines = () => {
+        if (click_mode !== ClickMode.FOLD) {
+            const shape_idx = mesh_to_idx.get(intersect_mesh) ?? -1
+            shapes.forEach((shape, i) => shape.setOutline(i === shape_idx))
+        }
+    }
+
     window.addEventListener('mousemove', checkIntersect);
     window.addEventListener('mouseup', checkIntersect);
     window.addEventListener('mousedown', checkIntersect);
     window.addEventListener('mouseup', _ => updateClickMode(false) );
     window.addEventListener('mousedown', _ => updateClickMode(true) );
-
+    window.addEventListener('mouseup', update_outlines);
+    window.addEventListener('mousedown', update_outlines);
+    window.addEventListener('mousemove', update_outlines);
 
 
     const update_scene = () => {
