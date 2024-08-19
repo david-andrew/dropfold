@@ -161,6 +161,7 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
         shape.group.position.z = i
         shape.group.position.x = i
         shape.group.rotation.y = Math.PI * i / 10
+        shape.group.rotation.x = Math.PI * i / 20
         shapes.push(shape)
     }
     shapes.forEach(shape => scene.add(shape.group))
@@ -310,14 +311,15 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
         dividingLine.visible = true;
         intersect_mesh.visible = false; //TODO where do we set this visible again
         // determine the point on the dividing plane:
-        const point = redSphere.position.clone().add(blueSphere.position).divideScalar(2)
+        const worldMidpoint = redSphere.position.clone().add(blueSphere.position).divideScalar(2)
 
         /// DEBUG draw the green sphere here
-        greenSphere.position.copy(point)
+        greenSphere.position.copy(worldMidpoint)
         greenSphere.visible = true;
 
-        const direction = blueSphere.position.clone().sub(redSphere.position).normalize()
-        console.log(direction)
+        // direction from drag point to edge
+        const worldDirection = blueSphere.position.clone().sub(redSphere.position).normalize()
+        console.log(worldDirection)
         
         //for each edge on the intersected mesh, determine the point of intersection (if any) with the dividing plane
         const shape_idx = mesh_to_idx.get(intersect_mesh)
@@ -325,14 +327,14 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
         const shapeVertices = shape.shape.getPoints(); // Get the original 2D points from the shape
         
         // convert the direction to 2D by projecting the line into the mesh's frame
-        const inv_tf = new THREE.Matrix4().copy(intersect_mesh.matrixWorld).invert()
-        const inv_rot = intersect_mesh.quaternion.clone().invert()
-        point.sub(intersect_mesh.position).applyMatrix4(inv_tf)
-        // direction.applyMatrix4(inv_tf).normalize()
-        direction.applyQuaternion(inv_rot).normalize()
-        const point2d = new vec2(point.x, point.y)
-        const direction2d = new vec2(direction.x, direction.y)
-        const perpdir = new vec2(-direction.y, direction.x)
+        const inv_tf = intersect_mesh.matrixWorld.clone().invert()
+        const localMidpoint = worldMidpoint.clone().applyMatrix4(inv_tf) ///GOOD
+        const localBluePos = blueSphere.position.clone().applyMatrix4(inv_tf)
+        const localRedPos = redSphere.position.clone().applyMatrix4(inv_tf)
+
+        const localDirection = localBluePos.clone().sub(localRedPos).normalize()
+        const point2d = new vec2(localMidpoint.x, localMidpoint.y)
+        const perpdir = new vec2(-localDirection.y, localDirection.x)
         const dividing_line_2d = {C: point2d, D: point2d.clone().add(perpdir)}
 
         // determine which edges of the shape intersect the perpendicular line
