@@ -187,14 +187,17 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
         if (!pressed) {
             click_mode = ClickMode.NONE
             paper.material.color.set(0xffffff)
+            sphere.visible = false;
             return;
         }
         if (intersect_point !== null) {
             click_mode = ClickMode.FOLD
             paper.material.color.set(0x0000ff)
+            sphere.visible = true;
             return;
         }
         click_mode = ClickMode.ORBIT
+        sphere.visible = false;
         paper.material.color.set(0x00ff00)
     }
     const update_outlines = () => {
