@@ -157,14 +157,14 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
 
     shapes.push(new Shape([[-8.5/2, 11/2], [8.5/2, 11/2], [8.5/2, -11/2], [-8.5/2, -11/2]]))
     shapes[0].group.position.z = -0.1
-    // for (let i = 1; i < 10; i++) {
-    //     const shape = new Shape([[-1,1], [1,1], [1,-1], [-1,-1]])
-    //     shape.group.position.z = i
-    //     shape.group.position.x = i
-    //     shape.group.rotation.y = Math.PI * i / 10
-    //     shape.group.rotation.x = Math.PI * i / 20
-    //     shapes.push(shape)
-    // }
+    for (let i = 1; i < 10; i++) {
+        const shape = new Shape([[-1,1], [1,1], [1,-1], [-1,-1]])
+        shape.group.position.z = i
+        shape.group.position.x = i
+        shape.group.rotation.y = Math.PI * i / 10
+        shape.group.rotation.x = Math.PI * i / 20
+        shapes.push(shape)
+    }
     shapes.forEach(shape => scene.add(shape.group))
     sync_shapes()
     sync_mesh_map()
@@ -394,6 +394,8 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
         const shape1 = new Shape(shape1_verts.map(v => [v.x, v.y]))
         const shape2 = new Shape(shape2_verts.map(v => [v.x, v.y]))
         replace_split_shapes(shape1, shape2)
+        shape1.group.applyMatrix4(intersect_mesh.matrixWorld)
+        shape2.group.applyMatrix4(intersect_mesh.matrixWorld)
         // shape1.group.visible = true
         // shape2.group.visible = true
 
@@ -416,6 +418,7 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
         // create a transform to reflect the non-containing shape across the dividing line
         const axis = new THREE.Vector3().subVectors(p0, p1).normalize();
         const angle = Math.PI; // 180 degrees in radians
+
         const quaternion = new THREE.Quaternion().setFromAxisAngle(axis, angle);
         const rotationMatrix = new THREE.Matrix4().makeRotationFromQuaternion(quaternion);
         const translationToOrigin = new THREE.Matrix4().makeTranslation(-p0.x, -p0.y, -p0.z);
@@ -426,10 +429,10 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
             .premultiply(rotationMatrix)
             .premultiply(translationBack);
         
-        
-        
-        
         non_containing_shape.group.applyMatrix4(transformationMatrix)
+        
+        
+        
         non_containing_shape.group.visible = true
 
 
