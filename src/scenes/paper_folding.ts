@@ -63,7 +63,7 @@ class Shape {
 
 
     setOutline(visible: boolean) {
-        this.outline_material.color.set(visible ? 0xff0000 : 0x000000)
+        // this.outline_material.color.set(visible ? 0xff0000 : 0x000000)
     }
 }
 
@@ -284,6 +284,8 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
         }
         if (intersect_point !== null) {
             click_mode = ClickMode.FOLD
+            const interset_idx = mesh_to_idx.get(intersect_mesh)
+            shapes[interset_idx].outline.visible = false ///HACK
             // paper.material.color.set(0x0000ff)
             redSphere.visible = true;
             draw_dividing_line()
