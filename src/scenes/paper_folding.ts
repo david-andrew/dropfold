@@ -145,8 +145,8 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 
     // Create an AxesHelper
-    const axisHelper = make_axis_helper()
-    scene.add(axisHelper);
+    // const axisHelper = make_axis_helper()
+    // scene.add(axisHelper);
 
     // Paper setup
     const geometry = new THREE.BoxGeometry(8.5, 11, 0.01);
@@ -177,7 +177,7 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
     const sphereMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
     const redSphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
     redSphere.visible = false; // Initially hide the sphere
-    scene.add(redSphere);
+    // scene.add(redSphere);
 
 
     // blue sphere setup
@@ -185,7 +185,7 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
     const blueSphereMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
     const blueSphere = new THREE.Mesh(blueSphereGeometry, blueSphereMaterial);
     blueSphere.visible = false; // Initially hide the sphere
-    scene.add(blueSphere);
+    // scene.add(blueSphere);
 
 
 
@@ -194,7 +194,7 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
     const greenSphereMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
     const greenSphere = new THREE.Mesh(greenSphereGeometry, greenSphereMaterial);
     greenSphere.visible = false; // Initially hide the sphere
-    scene.add(greenSphere);
+    // scene.add(greenSphere);
 
 
     // dividing line setup
@@ -204,7 +204,7 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
     lineMaterial.resolution.set(window.innerWidth, window.innerHeight);
     const dividingLine = new Line2(lineGeometry, lineMaterial);
     dividingLine.visible = false;
-    scene.add(dividingLine);
+    // scene.add(dividingLine);
 
 
     // shape preview setup
