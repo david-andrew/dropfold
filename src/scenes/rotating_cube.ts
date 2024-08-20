@@ -28,5 +28,5 @@ export const rotating_cube_scene = (renderer:THREE.WebGLRenderer): SceneFunction
         renderer.render(scene, camera);
     }
 
-    return { update_scene, camera }
+    return { update_scene, camera, resetter: () => {} };
 }

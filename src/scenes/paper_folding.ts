@@ -141,7 +141,7 @@ const make_axis_helper = ({thickness = 10, length = 5} = {}) => {
 }
 
 
-export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctions => {
+export const general_folding_scene = (seed_shape: Array<[number, number]>) => (renderer: THREE.WebGLRenderer): SceneFunctions => {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87ceeb); // sky blue background
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -159,7 +159,9 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
 
 
     //////// GENERATE PAPER IN SCENE ////////
-    shapes.push(new Shape([[-8.5/2, 11/2], [8.5/2, 11/2], [8.5/2, -11/2], [-8.5/2, -11/2]]))
+    // shapes.push(new Shape([[-8.5/2, 11/2], [8.5/2, 11/2], [8.5/2, -11/2], [-8.5/2, -11/2]]))
+    // shapes.push(new Shape([[0, 10], [9.511, 3.09], [5.878, -8.09], [-5.878, -8.09], [-9.511, 3.09]]))
+    shapes.push(new Shape(seed_shape))
     shapes[0].group.position.z = -0.1
     // for (let i = 1; i < 10; i++) {
     //     const shape = new Shape([[-1,1], [1,1], [1,-1], [-1,-1]])
@@ -481,9 +483,10 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
 
 
 
-
-    window.addEventListener('mouseup', _ => updateClickMode(false) );
-    window.addEventListener('mousedown', _ => updateClickMode(true) );
+    const clickmodefalse = _ => updateClickMode(false)
+    const clickmodetrue = _ => updateClickMode(true)
+    window.addEventListener('mouseup', clickmodefalse);
+    window.addEventListener('mousedown', clickmodetrue);
     window.addEventListener('mousemove', checkIntersect);
     window.addEventListener('mouseup', checkIntersect);
     window.addEventListener('mousedown', checkIntersect);
@@ -505,7 +508,36 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
         renderer.render(scene, camera);
     }
 
-    return { update_scene, camera }
+    const resetter = () => {
+        //reset everything so that we can call the scene again from scratch
+        window.removeEventListener('mouseup', clickmodefalse);
+        window.removeEventListener('mousedown', clickmodetrue);
+        window.removeEventListener('mousemove', checkIntersect);
+        window.removeEventListener('mouseup', checkIntersect);
+        window.removeEventListener('mousedown', checkIntersect);
+        window.removeEventListener('mouseup', update_outlines);
+        window.removeEventListener('mousedown', update_outlines);
+        window.removeEventListener('mousemove', update_outlines);
+        window.removeEventListener('mouseup', update_closest_edge);
+        window.removeEventListener('mousemove', update_closest_edge);
+        window.removeEventListener('mousedown', draw_dividing_line);
+        window.removeEventListener('mouseup', draw_dividing_line);
+        window.removeEventListener('mousemove', draw_dividing_line);
+
+        // remove all objects from the scene
+        while(scene.children.length > 0){ 
+            scene.remove(scene.children[0]); 
+        }
+
+        // empty out the shapes/mesh arrays
+        shapes.length = 0
+        meshes.length = 0
+        mesh_to_idx.clear()
+    }
+
+
+
+    return { update_scene, camera, resetter }
 }
 
 
