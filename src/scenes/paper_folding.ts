@@ -212,10 +212,13 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
     // shape preview setup
     let split0 = new Shape([[-1,1], [1,1], [1,-1], [-1,-1]])
     let split1 = new Shape([[-1,1], [1,1], [1,-1], [-1,-1]])
-    scene.add(split0.group)
-    scene.add(split1.group)
-    split0.group.visible = false
-    split1.group.visible = false
+    const reset_split_shapes = () => {
+        scene.add(split0.group)
+        scene.add(split1.group)
+        split0.group.visible = false
+        split1.group.visible = false
+    }
+    reset_split_shapes()
     const replace_split_shapes = (shape0: Shape, shape1: Shape) => {
         split0.group.visible = false
         split1.group.visible = false
@@ -255,6 +258,7 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
 
         // Check for intersections with the paper mesh
         const intersects = raycaster.intersectObjects(click_mode === ClickMode.FOLD ? [intersect_mesh] : meshes)
+        // const intersects = raycaster.intersectObjects(click_mode === ClickMode.FOLD ? [intersect_mesh] : shapes.filter(s => s.group.visible).map(s => s.prism))
 
         const intersected = intersects.length > 0;
         if (intersected) {
@@ -451,10 +455,25 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
         // delete the current intersected mesh
         const shape_idx = mesh_to_idx.get(intersect_mesh)
         const intersect_group = shapes[shape_idx].group
-        scene.remove(intersect_group)
+        intersect_group.visible = false
+        // // scene.remove(intersect_group)
         intersect_mesh = null
 
-        console.log("applying fold", shape_idx)
+        // this all is traash apparently
+        // const shape0 = new Shape(split0.verts.map(v => [v.x, v.y]))
+        // const shape1 = new Shape(split1.verts.map(v => [v.x, v.y]))
+        // shape0.group.applyMatrix4(split0.group.matrixWorld)
+        // shape1.group.applyMatrix4(split1.group.matrixWorld)
+        // scene.add(shape0.group)
+        // scene.add(shape1.group)
+        // shapes.push(shape0)
+        // shapes.push(shape1)
+        // sync_shapes()
+        // // replace_split_shapes(new Shape([[-1,1], [1,1], [1,-1], [-1,-1]]), new Shape([[-1,1], [1,1], [1,-1], [-1,-1]]))
+        // split0.group.visible = false
+        // split1.group.visible = false
+
+        // console.log("applying fold", shape_idx)
     }
 
 
