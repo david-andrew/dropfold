@@ -19,6 +19,8 @@ type edge = {
     b: vert
 }
 
+const PAPER_THICKNESS = 0.01
+
 class Shape {
     // TODO: maybe have tf: THREE.Matrix4
     verts: Array<vert>
@@ -41,7 +43,7 @@ class Shape {
         this.shape.lineTo(this.verts[0].x, this.verts[0].y); // Close the shape
         const extrudeSettings = {
             steps: 1,
-            depth: 0.01,  // How far to extrude the shape
+            depth: PAPER_THICKNESS, //0.01,  // How far to extrude the shape
             bevelEnabled: false  // Disable bevel for a sharp edge
         };
 
@@ -149,10 +151,10 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
     // scene.add(axisHelper);
 
     // Paper setup
-    const geometry = new THREE.BoxGeometry(8.5, 11, 0.01);
-    geometry.translate(0, 0, -0.005); // Move the paper slightly back so it doesn't overlap with the shape
-    const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
-    const paper = new THREE.Mesh(geometry, material);
+    // const geometry = new THREE.BoxGeometry(8.5, 11, 0.01);
+    // geometry.translate(0, 0, -0.005); // Move the paper slightly back so it doesn't overlap with the shape
+    // const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    // const paper = new THREE.Mesh(geometry, material);
     // scene.add(paper);
 
 
@@ -274,14 +276,14 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
     const updateClickMode = (pressed:boolean) => {
         if (!pressed) {
             click_mode = ClickMode.NONE
-            paper.material.color.set(0xffffff)
+            // paper.material.color.set(0xffffff)
             redSphere.visible = false;
             dividingLine.visible = false;
             return;
         }
         if (intersect_point !== null) {
             click_mode = ClickMode.FOLD
-            paper.material.color.set(0x0000ff)
+            // paper.material.color.set(0x0000ff)
             redSphere.visible = true;
             draw_dividing_line()
             return;
@@ -289,7 +291,7 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
         click_mode = ClickMode.ORBIT
         redSphere.visible = false;
         dividingLine.visible = false;
-        paper.material.color.set(0x00ff00)
+        // paper.material.color.set(0x00ff00)
     }
     const update_outlines = () => {
         if (click_mode === ClickMode.FOLD) return
@@ -342,7 +344,6 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
 
         // direction from drag point to edge
         const worldDirection = blueSphere.position.clone().sub(redSphere.position).normalize()
-        console.log(worldDirection)
         
         //for each edge on the intersected mesh, determine the point of intersection (if any) with the dividing plane
         const shape_idx = mesh_to_idx.get(intersect_mesh)
@@ -380,11 +381,14 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
             console.error("More than 2 intersections found")
         }
         
+        // determine if camera is on +z or -z side. So that we can make the fold towards the camera
+        const front_side = camera.position.dot(new vec3(0, 0, 1)) > 0
+
         // convert intersections to world space
         const local_p0 = new vec2(intersections[0].x, intersections[0].y)
         const local_p1 = new vec2(intersections[1].x, intersections[1].y)
-        const p0 = new vec3(local_p0.x, local_p0.y, 0)
-        const p1 = new vec3(local_p1.x, local_p1.y, 0)
+        const p0 = new vec3(local_p0.x, local_p0.y, front_side ? PAPER_THICKNESS : 0)
+        const p1 = new vec3(local_p1.x, local_p1.y, front_side ? PAPER_THICKNESS : 0)
         p0.applyMatrix4(intersect_mesh.matrixWorld)
         p1.applyMatrix4(intersect_mesh.matrixWorld)
 
