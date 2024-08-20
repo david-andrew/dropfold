@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { SceneFunctions } from '../main';
 import { Vector2 as vec2, Vector3 as vec3 } from 'three';
 import { clamp } from 'three/src/math/MathUtils.js';
+import { cross2d } from '../utils';
 
 
 import { Line2 } from 'three/examples/jsm/lines/Line2.js';
@@ -156,14 +157,14 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
 
     shapes.push(new Shape([[-8.5/2, 11/2], [8.5/2, 11/2], [8.5/2, -11/2], [-8.5/2, -11/2]]))
     shapes[0].group.position.z = -0.1
-    for (let i = 1; i < 10; i++) {
-        const shape = new Shape([[-1,1], [1,1], [1,-1], [-1,-1]])
-        shape.group.position.z = i
-        shape.group.position.x = i
-        shape.group.rotation.y = Math.PI * i / 10
-        shape.group.rotation.x = Math.PI * i / 20
-        shapes.push(shape)
-    }
+    // for (let i = 1; i < 10; i++) {
+    //     const shape = new Shape([[-1,1], [1,1], [1,-1], [-1,-1]])
+    //     shape.group.position.z = i
+    //     shape.group.position.x = i
+    //     shape.group.rotation.y = Math.PI * i / 10
+    //     shape.group.rotation.x = Math.PI * i / 20
+    //     shapes.push(shape)
+    // }
     shapes.forEach(shape => scene.add(shape.group))
     sync_shapes()
     sync_mesh_map()
@@ -185,6 +186,7 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
     scene.add(blueSphere);
 
 
+
     // green sphere setup
     const greenSphereGeometry = new THREE.SphereGeometry(0.2, 32, 32);
     const greenSphereMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
@@ -201,6 +203,25 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
     const dividingLine = new Line2(lineGeometry, lineMaterial);
     dividingLine.visible = false;
     scene.add(dividingLine);
+
+
+    // shape preview setup
+    let split0 = new Shape([[-1,1], [1,1], [1,-1], [-1,-1]])
+    let split1 = new Shape([[-1,1], [1,1], [1,-1], [-1,-1]])
+    scene.add(split0.group)
+    scene.add(split1.group)
+    split0.group.visible = false
+    split1.group.visible = false
+    const replace_split_shapes = (shape0: Shape, shape1: Shape) => {
+        split0.group.visible = false
+        split1.group.visible = false
+        scene.remove(split0.group)
+        scene.remove(split1.group)
+        split0 = shape0
+        split1 = shape1
+        scene.add(split0.group)
+        scene.add(split1.group)
+    }
 
    
 
@@ -339,12 +360,14 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
 
         // determine which edges of the shape intersect the perpendicular line
         const intersections: Array<vec2> = []
-        for (let i = 0; i < shapeVertices.length; i++) {
-            const A = shapeVertices[i]
-            const B = shapeVertices[(i + 1) % shapeVertices.length]
+        const intersect_idxs: Array<number> = []
+        for (let i = 1; i < shapeVertices.length + 1; i++) {
+            const A = shapeVertices[i - 1]
+            const B = shapeVertices[i % shapeVertices.length]
             const intersection = getLineIntersection({A, B}, dividing_line_2d)
             if (intersection !== null) {
                 intersections.push(intersection)
+                intersect_idxs.push(i-1)
             }
         }
         if (intersections.length < 2) {
@@ -356,10 +379,65 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
         }
         
         // convert intersections to world space
-        const p0 = new vec3(intersections[0].x, intersections[0].y, 0)
-        const p1 = new vec3(intersections[1].x, intersections[1].y, 0)
+        const local_p0 = new vec2(intersections[0].x, intersections[0].y)
+        const local_p1 = new vec2(intersections[1].x, intersections[1].y)
+        const p0 = new vec3(local_p0.x, local_p0.y, 0)
+        const p1 = new vec3(local_p1.x, local_p1.y, 0)
         p0.applyMatrix4(intersect_mesh.matrixWorld)
         p1.applyMatrix4(intersect_mesh.matrixWorld)
+
+
+        // Generate two shapes based on the intersections
+        const [idx0, idx1] = intersect_idxs
+        const shape1_verts = [local_p0, ...shapeVertices.slice(idx0+1, idx1+1), local_p1]
+        const shape2_verts = [local_p1, ...shapeVertices.slice(idx1+1, shapeVertices.length), ...shapeVertices.slice(0, idx0+1), local_p0]        
+        const shape1 = new Shape(shape1_verts.map(v => [v.x, v.y]))
+        const shape2 = new Shape(shape2_verts.map(v => [v.x, v.y]))
+        replace_split_shapes(shape1, shape2)
+        // shape1.group.visible = true
+        // shape2.group.visible = true
+
+
+        // determine which shape contains the red sphere via a raycast
+        const raycaster = new THREE.Raycaster()
+        const screenRedPos = redSphere.position.clone().project(camera)
+        raycaster.setFromCamera(new vec2(screenRedPos.x, screenRedPos.y), camera)
+        const intersects = raycaster.intersectObjects([shape1.prism, shape2.prism])
+        const shape1_contains = intersects.length > 0 && intersects[0].object === shape1.prism
+        const shape2_contains = intersects.length > 0 && intersects[0].object === shape2.prism
+
+        shape1.group.visible = shape1_contains
+        shape2.group.visible = shape2_contains
+
+
+        const containing_shape = shape1_contains ? shape1 : shape2
+        const non_containing_shape = shape1_contains ? shape2 : shape1
+
+        // create a transform to reflect the non-containing shape across the dividing line
+        const axis = new THREE.Vector3().subVectors(p0, p1).normalize();
+        const angle = Math.PI; // 180 degrees in radians
+        const quaternion = new THREE.Quaternion().setFromAxisAngle(axis, angle);
+        const rotationMatrix = new THREE.Matrix4().makeRotationFromQuaternion(quaternion);
+        const translationToOrigin = new THREE.Matrix4().makeTranslation(-p0.x, -p0.y, -p0.z);
+        const translationBack = new THREE.Matrix4().makeTranslation(p0.x, p0.y, p0.z);
+        
+        const transformationMatrix = new THREE.Matrix4()
+            .premultiply(translationToOrigin)
+            .premultiply(rotationMatrix)
+            .premultiply(translationBack);
+        
+        
+        
+        
+        non_containing_shape.group.applyMatrix4(transformationMatrix)
+        non_containing_shape.group.visible = true
+
+
+  
+
+
+
+
 
         //debug
         // dividingLine.geometry.setPositions([point.x, point.y, point.z, point.x + direction.x, point.y + direction.y, point.z + direction.z])
