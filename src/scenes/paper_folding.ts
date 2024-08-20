@@ -402,8 +402,9 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
         replace_split_shapes(shape1, shape2)
         shape1.group.applyMatrix4(intersect_mesh.matrixWorld)
         shape2.group.applyMatrix4(intersect_mesh.matrixWorld)
-        // shape1.group.visible = true
-        // shape2.group.visible = true
+        shape1.group.visible = true
+        shape2.group.visible = true
+
 
 
         // determine which shape contains the red sphere via a raycast
@@ -413,10 +414,6 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
         const intersects = raycaster.intersectObjects([shape1.prism, shape2.prism])
         const shape1_contains = intersects.length > 0 && intersects[0].object === shape1.prism
         const shape2_contains = intersects.length > 0 && intersects[0].object === shape2.prism
-
-        shape1.group.visible = shape1_contains
-        shape2.group.visible = shape2_contains
-
 
         const containing_shape = shape1_contains ? shape1 : shape2
         const non_containing_shape = shape1_contains ? shape2 : shape1
@@ -437,14 +434,6 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
         
         non_containing_shape.group.applyMatrix4(transformationMatrix)
         
-        
-        
-        non_containing_shape.group.visible = true
-
-
-  
-
-
 
 
 
