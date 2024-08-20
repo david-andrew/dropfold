@@ -155,16 +155,18 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
     const paper = new THREE.Mesh(geometry, material);
     // scene.add(paper);
 
+
+    //////// GENERATE PAPER IN SCENE ////////
     shapes.push(new Shape([[-8.5/2, 11/2], [8.5/2, 11/2], [8.5/2, -11/2], [-8.5/2, -11/2]]))
     shapes[0].group.position.z = -0.1
-    for (let i = 1; i < 10; i++) {
-        const shape = new Shape([[-1,1], [1,1], [1,-1], [-1,-1]])
-        shape.group.position.z = i
-        shape.group.position.x = i
-        shape.group.rotation.y = Math.PI * i / 10
-        shape.group.rotation.x = Math.PI * i / 20
-        shapes.push(shape)
-    }
+    // for (let i = 1; i < 10; i++) {
+    //     const shape = new Shape([[-1,1], [1,1], [1,-1], [-1,-1]])
+    //     shape.group.position.z = i
+    //     shape.group.position.x = i
+    //     shape.group.rotation.y = Math.PI * i / 10
+    //     shape.group.rotation.x = Math.PI * i / 20
+    //     shapes.push(shape)
+    // }
     shapes.forEach(shape => scene.add(shape.group))
     sync_shapes()
     sync_mesh_map()
