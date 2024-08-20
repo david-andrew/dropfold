@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { SceneFunctions } from '../main';
 import { Vector2 as vec2, Vector3 as vec3 } from 'three';
-import { clamp } from 'three/src/math/MathUtils.js';
+import { clamp, randInt } from 'three/src/math/MathUtils.js';
 import { cross2d } from '../utils';
 
 
@@ -275,6 +275,7 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
     }
     const updateClickMode = (pressed:boolean) => {
         if (!pressed) {
+            if (click_mode === ClickMode.FOLD) apply_fold()
             click_mode = ClickMode.NONE
             // paper.material.color.set(0xffffff)
             redSphere.visible = false;
@@ -435,8 +436,6 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
         non_containing_shape.group.applyMatrix4(transformationMatrix)
         
 
-
-
         //debug
         // dividingLine.geometry.setPositions([point.x, point.y, point.z, point.x + direction.x, point.y + direction.y, point.z + direction.z])
         dividingLine.geometry.setPositions([p0.x, p0.y, p0.z, p1.x, p1.y, p1.z])
@@ -444,6 +443,23 @@ export const paper_folding_scene = (renderer: THREE.WebGLRenderer): SceneFunctio
         // const direction2d = new vec2(direction.x, direction.y)
 
     }
+
+
+    const apply_fold = () => {
+        // delete the current intersected mesh
+        const shape_idx = mesh_to_idx.get(intersect_mesh)
+        const intersect_group = shapes[shape_idx].group
+        scene.remove(intersect_group)
+        intersect_mesh = null
+
+        console.log("applying fold", shape_idx)
+    }
+
+
+
+
+
+
 
     window.addEventListener('mouseup', _ => updateClickMode(false) );
     window.addEventListener('mousedown', _ => updateClickMode(true) );
