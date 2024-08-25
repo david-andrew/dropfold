@@ -2,6 +2,7 @@ import * as THREE from 'three';
 // import { paper_folding_scene } from './scenes/paper_folding';
 import {general_folding_scene} from './scenes/paper_folding';
 import {rotating_cube_scene} from './scenes/rotating_cube';
+import { test_touch_controls_scene } from './scenes/touch_controls_testing';
 
 // Find the div with id 'GameView'
 const gameView = document.getElementById('GameView') as HTMLDivElement;
@@ -59,14 +60,15 @@ const scene_selector_main = () => {
         '2': general_folding_scene([[0, 10], [9.511, 3.09], [5.878, -8.09], [-5.878, -8.09], [-9.511, 3.09]]),
         '3': general_folding_scene([[10, 0], [5, 8.66], [-5, 8.66], [-10, 0], [-5, -8.66], [5, -8.66]]),
         '4': general_folding_scene([[0, 3], [-8.66, -5], [4.22, -5]]),
-        '5': general_folding_scene([[0, 10], [10, 5], [5, -10], [0,-10], [-10, 0], [-5, 10]])
-
+        '5': general_folding_scene([[0, 10], [10, 5], [5, -10], [0,-10], [-10, 0], [-5, 10]]),
+        '6': test_touch_controls_scene,
+        
 
 
     }
 
-    // default call scene 3
-    let resetter = main(scene_button_map['1']);
+    // default call scene
+    let resetter = main(scene_button_map['6']);
 
     // event listener for keypresses
     document.addEventListener('keydown', (event) => {
