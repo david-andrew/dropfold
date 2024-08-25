@@ -6,10 +6,9 @@ type OrbitalPointerProps = {
     camera: THREE.Camera,
     scene: THREE.Scene,
     domElement: HTMLElement
+    getInteractables: () => THREE.Mesh[] //TBD if this should be more general e.g. THREE.Object3D[]
     enablePan?: boolean
     showPointer?: boolean
-
-    DEBUG_CUBE_REPLACE_SOON: THREE.Mesh
 }
 class OrbitalPointer {
     cameraRef: THREE.Camera;
@@ -19,17 +18,15 @@ class OrbitalPointer {
     raycaster = new THREE.Raycaster();
     isInteracting = false;
     interactionSphere: THREE.Mesh;
+    getInteractables: () => THREE.Mesh[];
 
-    DEBUG_CUBE_REPLACE_SOON: THREE.Mesh;
 
-
-    constructor({camera, scene, domElement, enablePan=false, showPointer=false, DEBUG_CUBE_REPLACE_SOON}: OrbitalPointerProps) {
+    constructor({camera, scene, domElement, getInteractables, enablePan=false, showPointer=true}: OrbitalPointerProps) {
         this.cameraRef = camera;
         this.controls = new OrbitControls(camera, domElement);
         this.controls.enablePan = enablePan;
         this.showPointer = showPointer;
-
-        this.DEBUG_CUBE_REPLACE_SOON = DEBUG_CUBE_REPLACE_SOON;
+        this.getInteractables = getInteractables;
 
         // Create a small sphere to represent the click/touch location
         const sphereGeometry = new THREE.SphereGeometry(0.1, 16, 16);
@@ -37,7 +34,6 @@ class OrbitalPointer {
         this.interactionSphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
         scene.add(this.interactionSphere);
         this.interactionSphere.visible = false;
-
 
         // Add event listeners for both touch and mouse interaction
         window.addEventListener('mousedown', this.onPointerDown, false);
@@ -69,7 +65,7 @@ class OrbitalPointer {
         this.raycaster.setFromCamera(this.pointer, this.cameraRef);
 
         // Calculate objects intersecting the picking ray
-        const intersects = this.raycaster.intersectObjects([this.DEBUG_CUBE_REPLACE_SOON]);
+        const intersects = this.raycaster.intersectObjects(this.getInteractables());
 
         if (intersects.length > 0) {
             // Disable orbit controls if the cube is touched/clicked
@@ -80,7 +76,7 @@ class OrbitalPointer {
             console.log('Object interacted with at:', intersects[0].point);
 
             // Make the interaction sphere visible and position it at the interaction location
-            this.interactionSphere.visible = true;
+            this.interactionSphere.visible = true && this.showPointer;
             this.interactionSphere.position.copy(intersects[0].point);
         }
     }
@@ -102,7 +98,7 @@ class OrbitalPointer {
         this.raycaster.setFromCamera(this.pointer, this.cameraRef);
 
         // Calculate objects intersecting the picking ray
-        const intersects = this.raycaster.intersectObjects([this.DEBUG_CUBE_REPLACE_SOON]);
+        const intersects = this.raycaster.intersectObjects(this.getInteractables());
 
         if (intersects.length > 0) {
             // Update the sphere position as the pointer moves
@@ -160,7 +156,7 @@ export const test_touch_controls_scene = (renderer:THREE.WebGLRenderer): SceneFu
     scene.add(cube);
     
     // Add orbit controls to the camera
-    const pointer = new OrbitalPointer({camera, scene, domElement: renderer.domElement, enablePan: false, showPointer: false, DEBUG_CUBE_REPLACE_SOON: cube});
+    const pointer = new OrbitalPointer({camera, scene, domElement: renderer.domElement, getInteractables: () => [cube]});
 
     const update_scene = () => {
         pointer.update();
