@@ -6,7 +6,8 @@ type OrbitalPointerProps = {
     camera: THREE.Camera;
     scene: THREE.Scene;
     domElement: HTMLElement;
-    getInteractables: () => THREE.Mesh[]; //TBD if this should be more general e.g. THREE.Object3D[]
+    getInteractables: (isInteracting:boolean) => THREE.Mesh[]; //TBD if this should be more general e.g. THREE.Object3D[]
+    onRelease?: () => void;
     enablePan?: boolean;
     showPointer?: boolean;
 };
@@ -19,14 +20,17 @@ export class OrbitalPointer {
     raycaster = new THREE.Raycaster();
     isInteracting = false;
     interactionSphere: THREE.Mesh;
-    getInteractables: () => THREE.Mesh[];
+    getInteractables: (isInteracting:boolean) => THREE.Mesh[];
+    onRelease?: () => void;
+    intersects: THREE.Intersection[] = [];   // current intersections returned by raycaster
 
-    constructor({ camera, scene, domElement, getInteractables, enablePan = false, showPointer = true }: OrbitalPointerProps) {
+    constructor({ camera, scene, domElement, getInteractables, onRelease, enablePan = false, showPointer = true }: OrbitalPointerProps) {
         this.cameraRef = camera;
         this.controls = new OrbitControls(camera, domElement);
         this.controls.enablePan = enablePan;
         this.showPointer = showPointer;
         this.getInteractables = getInteractables;
+        this.onRelease = onRelease;
 
         // Create a small sphere to represent the click/touch location
         const sphereGeometry = new THREE.SphereGeometry(0.1, 16, 16);
@@ -65,19 +69,19 @@ export class OrbitalPointer {
         this.raycaster.setFromCamera(this.pointer, this.cameraRef);
 
         // Calculate objects intersecting the picking ray
-        const intersects = this.raycaster.intersectObjects(this.getInteractables());
+        this.intersects = this.raycaster.intersectObjects(this.getInteractables(this.isInteracting));
 
-        if (intersects.length > 0) {
+        if (this.intersects.length > 0) {
             // Disable orbit controls if the cube is touched/clicked
             this.controls.enabled = false;
             this.isInteracting = true;
 
             // Log the interaction position to the console
-            console.log('Object interacted with at:', intersects[0].point);
+            // console.log('Object interacted with at:', this.intersects[0].point);
 
             // Make the interaction sphere visible and position it at the interaction location
             this.interactionSphere.visible = true && this.showPointer;
-            this.interactionSphere.position.copy(intersects[0].point);
+            this.interactionSphere.position.copy(this.intersects[0].point);
         }
     };
 
@@ -98,11 +102,11 @@ export class OrbitalPointer {
         this.raycaster.setFromCamera(this.pointer, this.cameraRef);
 
         // Calculate objects intersecting the picking ray
-        const intersects = this.raycaster.intersectObjects(this.getInteractables());
+        this.intersects = this.raycaster.intersectObjects(this.getInteractables(this.isInteracting));
 
-        if (intersects.length > 0) {
+        if (this.intersects.length > 0) {
             // Update the sphere position as the pointer moves
-            this.interactionSphere.position.copy(intersects[0].point);
+            this.interactionSphere.position.copy(this.intersects[0].point);
         }
     };
 
@@ -114,8 +118,14 @@ export class OrbitalPointer {
             // Hide the sphere when the interaction ends
             this.interactionSphere.visible = false;
             this.isInteracting = false;
+
+            this.onRelease?.();
         }
     };
+
+    getIntersections = () => {
+        return this.intersects;
+    }
 
     update = () => {
         this.controls.update();
