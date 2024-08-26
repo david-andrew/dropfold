@@ -3,13 +3,13 @@ import { SceneFunctions } from '../main';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 type OrbitalPointerProps = {
-    camera: THREE.Camera,
-    scene: THREE.Scene,
-    domElement: HTMLElement
-    getInteractables: () => THREE.Mesh[] //TBD if this should be more general e.g. THREE.Object3D[]
-    enablePan?: boolean
-    showPointer?: boolean
-}
+    camera: THREE.Camera;
+    scene: THREE.Scene;
+    domElement: HTMLElement;
+    getInteractables: () => THREE.Mesh[]; //TBD if this should be more general e.g. THREE.Object3D[]
+    enablePan?: boolean;
+    showPointer?: boolean;
+};
 class OrbitalPointer {
     cameraRef: THREE.Camera;
     controls: OrbitControls;
@@ -20,8 +20,7 @@ class OrbitalPointer {
     interactionSphere: THREE.Mesh;
     getInteractables: () => THREE.Mesh[];
 
-
-    constructor({camera, scene, domElement, getInteractables, enablePan=false, showPointer=true}: OrbitalPointerProps) {
+    constructor({ camera, scene, domElement, getInteractables, enablePan = false, showPointer = true }: OrbitalPointerProps) {
         this.cameraRef = camera;
         this.controls = new OrbitControls(camera, domElement);
         this.controls.enablePan = enablePan;
@@ -46,7 +45,7 @@ class OrbitalPointer {
 
     setShowPointer = (showPointer: boolean) => {
         this.showPointer = showPointer;
-    }
+    };
 
     onPointerDown = (event: MouseEvent | TouchEvent) => {
         event.preventDefault();
@@ -79,7 +78,7 @@ class OrbitalPointer {
             this.interactionSphere.visible = true && this.showPointer;
             this.interactionSphere.position.copy(intersects[0].point);
         }
-    }
+    };
 
     onPointerMove = (event: MouseEvent | TouchEvent) => {
         if (!this.isInteracting) return;
@@ -104,7 +103,7 @@ class OrbitalPointer {
             // Update the sphere position as the pointer moves
             this.interactionSphere.position.copy(intersects[0].point);
         }
-    }
+    };
 
     onPointerUp = () => {
         if (this.isInteracting) {
@@ -115,11 +114,11 @@ class OrbitalPointer {
             this.interactionSphere.visible = false;
             this.isInteracting = false;
         }
-    }
+    };
 
     update = () => {
         this.controls.update();
-    }
+    };
 
     dispose = () => {
         this.controls.dispose();
@@ -135,12 +134,10 @@ class OrbitalPointer {
         // Clean up the interaction sphere
         this.interactionSphere.geometry.dispose();
         (this.interactionSphere.material as THREE.Material).dispose();
-    }
+    };
 }
 
-
-
-export const test_touch_controls_scene = (renderer:THREE.WebGLRenderer): SceneFunctions => {
+export const test_touch_controls_scene = (renderer: THREE.WebGLRenderer): SceneFunctions => {
     // Create a scene
     const scene = new THREE.Scene();
 
@@ -148,26 +145,25 @@ export const test_touch_controls_scene = (renderer:THREE.WebGLRenderer): SceneFu
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.z = 5;
 
-    
     // Create a simple box geometry and a basic material and combine them into a mesh
-    const geometry = new THREE.BoxGeometry(2,2,2);
+    const geometry = new THREE.BoxGeometry(2, 2, 2);
     const material = new THREE.MeshBasicMaterial({ color: 0xf00055 });
     const cube = new THREE.Mesh(geometry, material);
     scene.add(cube);
-    
+
     // Add orbit controls to the camera
-    const pointer = new OrbitalPointer({camera, scene, domElement: renderer.domElement, getInteractables: () => [cube]});
+    const pointer = new OrbitalPointer({ camera, scene, domElement: renderer.domElement, getInteractables: () => [cube] });
 
     const update_scene = () => {
         pointer.update();
         renderer.render(scene, camera);
-    }
+    };
 
     const resetter = () => {
         pointer.dispose();
         geometry.dispose();
         material.dispose();
-    }
+    };
 
-    return { update_scene, camera, resetter};
-}
+    return { update_scene, camera, resetter };
+};
