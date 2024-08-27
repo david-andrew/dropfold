@@ -16,7 +16,14 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
     const cube = new THREE.Mesh(geometry, material);
     scene.add(cube);
 
-    const pointer = new OrbitalPointer({ camera, scene, domElement: renderer.domElement, getInteractables: () => [cube] });
+    // add a second cube
+    const geometry2 = new THREE.BoxGeometry(1, 1, 1);
+    const material2 = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+    const cube2 = new THREE.Mesh(geometry2, material2);
+    scene.add(cube2);
+    cube2.position.x = 2;
+
+    const pointer = new OrbitalPointer({ camera, scene, domElement: renderer.domElement, getInteractables: () => [cube, cube2] });
     
     const update_scene = () => {
         renderer.render(scene, camera);

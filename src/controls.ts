@@ -1,34 +1,63 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-// TODO: some approach for getting the results of the raycast back from this
+/**
+ * Arguments passed to the OrbitalPointer constructor
+ * @param camera - The camera object to be used for raycasting
+ * @param scene - The scene object to be used for raycasting
+ * @param domElement - The DOM element to be used for event listeners
+ * @param getInteractables - A function that returns an array of meshes to be raycasted against
+ * @param onRelease - (optional) A user callback function to be called when the pointer is released
+ * @param enablePan - (optional) A boolean to enable panning in orbit controls. Default is false
+ * @param showPointer - (optional) A boolean to show a small sphere at the intersection point. Default is true
+ * @param meshHopping - (optional) A boolean to allow the pointer to drag over multiple meshes, otherwise restricts to the first mesh hit. Default is false
+ */
 type OrbitalPointerProps = {
     camera: THREE.Camera;
     scene: THREE.Scene;
     domElement: HTMLElement;
-    getInteractables: (isInteracting:boolean) => THREE.Mesh[]; //TBD if this should be more general e.g. THREE.Object3D[]
+    getInteractables: () => THREE.Mesh[]; //TBD if this should be more general e.g. THREE.Object3D[]
     onRelease?: () => void;
     enablePan?: boolean;
     showPointer?: boolean;
+    meshHopping?: boolean;
 };
 
+/**
+ * A class for handling mouse and touch interactions to combine orbit controls with object interaction.
+ * If the pointer clicks on the background, then orbit controls are enabled
+ * If the pointer clicks on an object, then orbit controls are disabled and the touch point is tracked
+ */
 export class OrbitalPointer {
     cameraRef: THREE.Camera;
     controls: OrbitControls;
     pointer = new THREE.Vector2();
     showPointer: boolean;
+    meshHopping: boolean;
     raycaster = new THREE.Raycaster();
     isInteracting = false;
     interactionSphere: THREE.Mesh;
-    getInteractables: (isInteracting:boolean) => THREE.Mesh[];
+    touchPoint: THREE.Vector3 | null = null;
+    touchMesh: THREE.Mesh | null = null;
+    getInteractables: () => THREE.Mesh[];
     onRelease?: () => void;
-    intersects: THREE.Intersection[] = [];   // current intersections returned by raycaster
+    intersects: THREE.Intersection[] = []; // current intersections returned by raycaster
 
-    constructor({ camera, scene, domElement, getInteractables, onRelease, enablePan = false, showPointer = true }: OrbitalPointerProps) {
+    constructor({
+        camera,
+        scene,
+        domElement,
+        getInteractables,
+        onRelease,
+        enablePan = false,
+        showPointer = true,
+        meshHopping = false
+    }: OrbitalPointerProps) {
         this.cameraRef = camera;
         this.controls = new OrbitControls(camera, domElement);
         this.controls.enablePan = enablePan;
         this.showPointer = showPointer;
+        this.meshHopping = meshHopping;
         this.getInteractables = getInteractables;
         this.onRelease = onRelease;
 
@@ -69,12 +98,14 @@ export class OrbitalPointer {
         this.raycaster.setFromCamera(this.pointer, this.cameraRef);
 
         // Calculate objects intersecting the picking ray
-        this.intersects = this.raycaster.intersectObjects(this.getInteractables(this.isInteracting));
+        this.intersects = this.raycaster.intersectObjects(this.getInteractables());
 
         if (this.intersects.length > 0) {
             // Disable orbit controls if the cube is touched/clicked
             this.controls.enabled = false;
             this.isInteracting = true;
+            this.touchPoint = this.intersects[0].point;
+            this.touchMesh = this.intersects[0].object as THREE.Mesh;
 
             // Log the interaction position to the console
             // console.log('Object interacted with at:', this.intersects[0].point);
@@ -102,9 +133,13 @@ export class OrbitalPointer {
         this.raycaster.setFromCamera(this.pointer, this.cameraRef);
 
         // Calculate objects intersecting the picking ray
-        this.intersects = this.raycaster.intersectObjects(this.getInteractables(this.isInteracting));
+        this.intersects = this.raycaster.intersectObjects(this.meshHopping ? this.getInteractables() : [this.touchMesh]);
 
         if (this.intersects.length > 0) {
+            // Update the touch point and mesh if the pointer moves over another mesh
+            this.touchPoint = this.intersects[0].point;
+            this.touchMesh = this.intersects[0].object as THREE.Mesh;
+
             // Update the sphere position as the pointer moves
             this.interactionSphere.position.copy(this.intersects[0].point);
         }
@@ -115,17 +150,20 @@ export class OrbitalPointer {
 
         // Re-enable orbit controls when the interaction ends
         this.controls.enabled = true;
+        this.isInteracting = false;
+        this.touchPoint = null;
+        this.touchMesh = null;
 
         // Hide the sphere when the interaction ends
         this.interactionSphere.visible = false;
-        this.isInteracting = false;
 
+        // Call the user-defined callback function if it exists
         this.onRelease?.();
     };
 
     getIntersections = () => {
         return this.intersects;
-    }
+    };
 
     update = () => {
         this.controls.update();
