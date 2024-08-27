@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import {general_folding_scene} from './scenes/paper_folding';
-import { general_folding_scene as general_folding_scene_2 } from './scenes/paper_folding_2';
+// import {general_folding_scene} from './scenes/paper_folding';
+import { general_folding_scene } from './scenes/paper_folding_2';
 import {rotating_cube_scene} from './scenes/rotating_cube';
 import { test_touch_controls_scene } from './scenes/touch_controls_testing';
 

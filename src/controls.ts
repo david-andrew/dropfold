@@ -111,16 +111,16 @@ export class OrbitalPointer {
     };
 
     onPointerUp = () => {
-        if (this.isInteracting) {
-            // Re-enable orbit controls when the interaction ends
-            this.controls.enabled = true;
+        if (!this.isInteracting) return;
 
-            // Hide the sphere when the interaction ends
-            this.interactionSphere.visible = false;
-            this.isInteracting = false;
+        // Re-enable orbit controls when the interaction ends
+        this.controls.enabled = true;
 
-            this.onRelease?.();
-        }
+        // Hide the sphere when the interaction ends
+        this.interactionSphere.visible = false;
+        this.isInteracting = false;
+
+        this.onRelease?.();
     };
 
     getIntersections = () => {
