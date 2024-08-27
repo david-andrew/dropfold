@@ -7,6 +7,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
  * @param scene - The scene object to be used for raycasting
  * @param domElement - The DOM element to be used for event listeners
  * @param getInteractables - A function that returns an array of meshes to be raycasted against
+ * @param onPress - (optional) A user callback function to be called when the pointer is pressed
  * @param onRelease - (optional) A user callback function to be called when the pointer is released
  * @param enablePan - (optional) A boolean to enable panning in orbit controls. Default is false
  * @param showPointer - (optional) A boolean to show a small sphere at the intersection point. Default is true
@@ -17,6 +18,7 @@ type OrbitalPointerProps = {
     scene: THREE.Scene;
     domElement: HTMLElement;
     getInteractables: () => THREE.Mesh[]; //TBD if this should be more general e.g. THREE.Object3D[]
+    onPress?: () => void;
     onRelease?: () => void;
     enablePan?: boolean;
     showPointer?: boolean;
@@ -36,10 +38,12 @@ export class OrbitalPointer {
     meshHopping: boolean;
     raycaster = new THREE.Raycaster();
     isInteracting = false;
+    // prevWasInteracting = false; //TBD, may be useful
     interactionSphere: THREE.Mesh;
     touchPoint: THREE.Vector3 | null = null;
     touchMesh: THREE.Mesh | null = null;
     getInteractables: () => THREE.Mesh[];
+    onPress?: () => void;
     onRelease?: () => void;
     intersects: THREE.Intersection[] = []; // current intersections returned by raycaster
 
@@ -48,6 +52,7 @@ export class OrbitalPointer {
         scene,
         domElement,
         getInteractables,
+        onPress,
         onRelease,
         enablePan = false,
         showPointer = true,
@@ -59,6 +64,7 @@ export class OrbitalPointer {
         this.showPointer = showPointer;
         this.meshHopping = meshHopping;
         this.getInteractables = getInteractables;
+        this.onPress = onPress;
         this.onRelease = onRelease;
 
         // Create a small sphere to represent the click/touch location
@@ -100,20 +106,20 @@ export class OrbitalPointer {
         // Calculate objects intersecting the picking ray
         this.intersects = this.raycaster.intersectObjects(this.getInteractables());
 
-        if (this.intersects.length > 0) {
-            // Disable orbit controls if the cube is touched/clicked
-            this.controls.enabled = false;
-            this.isInteracting = true;
-            this.touchPoint = this.intersects[0].point;
-            this.touchMesh = this.intersects[0].object as THREE.Mesh;
+        if (this.intersects.length === 0) return;
+        
+        // Disable orbit controls if the cube is touched/clicked
+        this.controls.enabled = false;
+        this.isInteracting = true;
+        this.touchPoint = this.intersects[0].point;
+        this.touchMesh = this.intersects[0].object as THREE.Mesh;
 
-            // Log the interaction position to the console
-            // console.log('Object interacted with at:', this.intersects[0].point);
-
-            // Make the interaction sphere visible and position it at the interaction location
-            this.interactionSphere.visible = true && this.showPointer;
-            this.interactionSphere.position.copy(this.intersects[0].point);
-        }
+        // Make the interaction sphere visible and position it at the interaction location
+        this.interactionSphere.visible = true && this.showPointer;
+        this.interactionSphere.position.copy(this.intersects[0].point);
+        
+        // Call the user-defined callback function if it exists
+        this.onPress?.();
     };
 
     onPointerMove = (event: MouseEvent | TouchEvent) => {
@@ -142,10 +148,14 @@ export class OrbitalPointer {
 
             // Update the sphere position as the pointer moves
             this.interactionSphere.position.copy(this.intersects[0].point);
+        } else {
+            // TODO: want to move the touch point to the closest point on the edge of the mesh
+            // ideally it would stay on the face that was touched last
         }
     };
 
     onPointerUp = () => {
+        // this.isClicking = false;
         if (!this.isInteracting) return;
 
         // Re-enable orbit controls when the interaction ends

@@ -1,9 +1,10 @@
 import * as THREE from 'three'
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+// import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { SceneFunctions } from '../main';
 import { Vector2 as vec2, Vector3 as vec3 } from 'three';
 import { clamp, randInt } from 'three/src/math/MathUtils.js';
-import { cross2d } from '../utils';
+import { OrbitalPointer } from '../controls';
+// import { cross2d } from '../utils';
 
 
 import { Line2 } from 'three/examples/jsm/lines/Line2.js';
@@ -86,27 +87,27 @@ const sync_mesh_map = () => {
 }
 
 
-class MouseManager {
-    pos: vec2
-    pressed: boolean
-    constructor() {
-        this.pos = new THREE.Vector2()
-        this.pressed = false
-        window.addEventListener('mousemove', this.onMouseMove)
-        window.addEventListener('mousedown', this.onMousePressed)
-        window.addEventListener('mouseup', this.onMouseReleased)
-    }
-    onMousePressed: (event: MouseEvent) => void = (event: MouseEvent) => {
-        this.pressed = true
-    }
-    onMouseReleased: (event: MouseEvent) => void = (event: MouseEvent) => {
-        this.pressed = false
-    }
-    onMouseMove: (event: MouseEvent) => void = (event: MouseEvent) => {
-        this.pos.x = (event.clientX / window.innerWidth) * 2 - 1;
-        this.pos.y = -(event.clientY / window.innerHeight) * 2 + 1;
-    }
-}
+// class MouseManager {
+//     pos: vec2
+//     pressed: boolean
+//     constructor() {
+//         this.pos = new THREE.Vector2()
+//         this.pressed = false
+//         window.addEventListener('mousemove', this.onMouseMove)
+//         window.addEventListener('mousedown', this.onMousePressed)
+//         window.addEventListener('mouseup', this.onMouseReleased)
+//     }
+//     onMousePressed: (event: MouseEvent) => void = (event: MouseEvent) => {
+//         this.pressed = true
+//     }
+//     onMouseReleased: (event: MouseEvent) => void = (event: MouseEvent) => {
+//         this.pressed = false
+//     }
+//     onMouseMove: (event: MouseEvent) => void = (event: MouseEvent) => {
+//         this.pos.x = (event.clientX / window.innerWidth) * 2 - 1;
+//         this.pos.y = -(event.clientY / window.innerHeight) * 2 + 1;
+//     }
+// }
 
 
 const make_axis_helper = ({thickness = 10, length = 5} = {}) => {
@@ -180,16 +181,16 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
     const sphereGeometry = new THREE.SphereGeometry(0.2, 32, 32);
     const sphereMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
     const redSphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-    redSphere.visible = false; // Initially hide the sphere
-    scene.add(redSphere);
+    redSphere.visible = true//false; // Initially hide the sphere
+    // scene.add(redSphere);
 
 
     // blue sphere setup
     const blueSphereGeometry = new THREE.SphereGeometry(0.2, 32, 32);
     const blueSphereMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
     const blueSphere = new THREE.Mesh(blueSphereGeometry, blueSphereMaterial);
-    blueSphere.visible = false; // Initially hide the sphere
-    scene.add(blueSphere);
+    blueSphere.visible = true; // Initially hide the sphere
+    // scene.add(blueSphere);
 
 
 
@@ -198,7 +199,7 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
     const greenSphereMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
     const greenSphere = new THREE.Mesh(greenSphereGeometry, greenSphereMaterial);
     greenSphere.visible = false; // Initially hide the sphere
-    scene.add(greenSphere);
+    // scene.add(greenSphere);
 
 
     // dividing line setup
@@ -208,7 +209,7 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
     lineMaterial.resolution.set(window.innerWidth, window.innerHeight);
     const dividingLine = new Line2(lineGeometry, lineMaterial);
     dividingLine.visible = false;
-    scene.add(dividingLine);
+    // scene.add(dividingLine);
 
 
     // shape preview setup
@@ -236,81 +237,100 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
 
 
     // Set up raycaster and mouse vector
-    const raycaster = new THREE.Raycaster();
-    const mouseman = new MouseManager()
-    enum ClickMode { NONE, ORBIT, FOLD }
-    let click_mode = ClickMode.NONE             // what the mouse is currently doing
-    let intersect_point: vec3|null = null;      //the point where the ray intersects the closest mesh
-    let intersect_mesh: THREE.Mesh|null = null; // the mesh that the ray intersects
-    let would_sphere_be_visible = false;        // whether the sphere would be visible if the mouse was not pressed
+    // const raycaster = new THREE.Raycaster();
+    // const mouseman = new MouseManager()
+    // enum ClickMode { NONE, ORBIT, FOLD }
+    // let click_mode = ClickMode.NONE             // what the mouse is currently doing
+    // let intersect_point: vec3|null = null;      //the point where the ray intersects the closest mesh
+    // let intersect_mesh: THREE.Mesh|null = null; // the mesh that the ray intersects
+    // let would_sphere_be_visible = false;        // whether the sphere would be visible if the mouse was not pressed
+    let folding: boolean = false
+    const onPress = () => {
+        update_closest_edge()
+        folding = true
+
+        // HACK to hide the outline of the selected mesh
+        const interset_idx = mesh_to_idx.get(controls.touchMesh) ?? -1
+        console.assert(interset_idx !== -1)
+        shapes[interset_idx].outline.visible = false
+    }
+    const onRelease = () => {
+        folding = false 
+    }
+    const controls = new OrbitalPointer({ camera, scene, domElement: renderer.domElement, getInteractables: () => meshes, onPress, onRelease, showPointer: false});
 
     // set up click to orbit    
     camera.position.z = 15;
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.update();
+    // const controls = new OrbitControls(camera, renderer.domElement);
+    // controls.update();
 
 
     // Mouse move event
     const checkIntersect = (event: MouseEvent) => {
-        if (intersect_mesh !== null) intersect_mesh.visible = true;
+        if (controls.touchMesh !== null) controls.touchMesh.visible = true;
         // if (click_mode === ClickMode.FOLD) return
 
         // Update the raycaster with the camera and mouse position
-        raycaster.setFromCamera(mouseman.pos, camera);
+        // raycaster.setFromCamera(mouseman.pos, camera);
 
         // Check for intersections with the paper mesh
-        const intersects = raycaster.intersectObjects(click_mode === ClickMode.FOLD ? [intersect_mesh] : meshes)
+        // const intersects = raycaster.intersectObjects(click_mode === ClickMode.FOLD ? [intersect_mesh] : meshes)
         // const intersects = raycaster.intersectObjects(click_mode === ClickMode.FOLD ? [intersect_mesh] : shapes.filter(s => s.group.visible).map(s => s.prism))
 
-        const intersected = intersects.length > 0;
-        if (intersected) {
-            intersect_point = intersects[0].point
-            intersect_mesh = intersects[0].object as THREE.Mesh
-            redSphere.position.copy(intersect_point);
-        } else {
-            if (click_mode !== ClickMode.FOLD) {
-                intersect_point = null;
-                intersect_mesh = null;
-            }
+        // const intersected = intersects.length > 0;
+        if (controls.isInteracting) {
+            // intersect_point = intersects[0].point
+            // intersect_mesh = intersects[0].object as THREE.Mesh
+            redSphere.position.copy(controls.touchPoint);
+        // } else {
+        //     if (click_mode !== ClickMode.FOLD) {
+        //         intersect_point = null;
+        //         intersect_mesh = null;
+        //     }
         }
-        if (!mouseman.pressed) {
-            // sphere.visible = intersected;
-            would_sphere_be_visible = intersected;
-            blueSphere.visible = intersected;
-        }
+        // if (!controls.isClicking) {
+        //     // sphere.visible = intersected;
+        //     // would_sphere_be_visible = intersected;
+        //     blueSphere.visible = controls.intersects.length > 0;
+        // }
     }
-    const updateClickMode = (pressed:boolean) => {
-        if (!pressed) {
-            if (click_mode === ClickMode.FOLD) apply_fold()
-            click_mode = ClickMode.NONE
-            // paper.material.color.set(0xffffff)
-            redSphere.visible = false;
-            dividingLine.visible = false;
-            return;
-        }
-        if (intersect_point !== null) {
-            click_mode = ClickMode.FOLD
-            const interset_idx = mesh_to_idx.get(intersect_mesh)
-            shapes[interset_idx].outline.visible = false ///HACK
-            // paper.material.color.set(0x0000ff)
-            redSphere.visible = true;
-            draw_dividing_line()
-            return;
-        }
-        click_mode = ClickMode.ORBIT
-        redSphere.visible = false;
-        dividingLine.visible = false;
-        // paper.material.color.set(0x00ff00)
-    }
-    const update_outlines = () => {
-        if (click_mode === ClickMode.FOLD) return
-        const shape_idx = mesh_to_idx.get(intersect_mesh) ?? -1
-        shapes.forEach((shape, i) => shape.setOutline(i === shape_idx))
+    // const onPress = () => {}
+    // const onRelease = () => {
+    //     apply_fold()
+    // }
+    // const updateClickMode = (pressed:boolean) => {
+    //     if (!pressed) {
+    //         if (click_mode === ClickMode.FOLD) apply_fold()
+    //         click_mode = ClickMode.NONE
+    //         // paper.material.color.set(0xffffff)
+    //         redSphere.visible = false;
+    //         dividingLine.visible = false;
+    //         return;
+    //     }
+        // if (controls.isInteracting) {
+        //     // click_mode = ClickMode.FOLD
+        //     const interset_idx = mesh_to_idx.get(controls.touchMesh) ?? -1
+        //     shapes[interset_idx].outline.visible = false ///HACK
+        //     // paper.material.color.set(0x0000ff)
+        //     // redSphere.visible = true;
+        //     draw_dividing_line()
+        //     return;
+        // }
+    //     click_mode = ClickMode.ORBIT
+    //     redSphere.visible = false;
+    //     dividingLine.visible = false;
+    //     // paper.material.color.set(0x00ff00)
+    // }
+    // const update_outlines = () => {
+    //     if (click_mode === ClickMode.FOLD) return
+    //     const shape_idx = mesh_to_idx.get(intersect_mesh) ?? -1
+    //     shapes.forEach((shape, i) => shape.setOutline(i === shape_idx))
         
-    }
+    // }
     const update_closest_edge = () => {
-        if (click_mode === ClickMode.FOLD || intersect_mesh === null || intersect_point === null) return
-        const shape_idx = mesh_to_idx.get(intersect_mesh)
+        if (folding) return //(click_mode === ClickMode.FOLD || intersect_mesh === null || intersect_point === null) return
+        const shape_idx = mesh_to_idx.get(controls.touchMesh)
+        console.assert(shape_idx !== undefined)
         const shape = shapes[shape_idx]
 
         const shapeVertices = shape.shape.getPoints(); // Get the original 2D points from the shape
@@ -324,7 +344,7 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
         });
 
         let bestPoint = worldVertices[0];
-        const worldIntersect = intersect_point //intersect_point.clone().applyMatrix4(shape.prism.matrixWorld)
+        const worldIntersect = controls.touchPoint //intersect_point.clone().applyMatrix4(shape.prism.matrixWorld)
         let bestDistance = bestPoint.distanceTo(worldIntersect);
         for (let i = 1; i < worldVertices.length + 1; i++) {
             const V = worldVertices[i % worldVertices.length].clone().sub(worldVertices[i-1])
@@ -341,9 +361,11 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
     }
     const draw_dividing_line = () => {
         greenSphere.visible = false;
-        if (intersect_point === null || intersect_mesh === null || !blueSphere.visible || !redSphere.visible) return
+        // if (intersect_point === null || intersect_mesh === null || !blueSphere.visible || !redSphere.visible) return
+        if (!controls.isInteracting) return
         dividingLine.visible = true;
-        intersect_mesh.visible = false; //TODO where do we set this visible again
+        controls.touchMesh.visible = false
+        // intersect_mesh.visible = false; //TODO where do we set this visible again
         // determine the point on the dividing plane:
         const worldMidpoint = redSphere.position.clone().add(blueSphere.position).divideScalar(2)
 
@@ -355,12 +377,12 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
         const worldDirection = blueSphere.position.clone().sub(redSphere.position).normalize()
         
         //for each edge on the intersected mesh, determine the point of intersection (if any) with the dividing plane
-        const shape_idx = mesh_to_idx.get(intersect_mesh)
+        const shape_idx = mesh_to_idx.get(controls.touchMesh)
         const shape = shapes[shape_idx]
         const shapeVertices = shape.shape.getPoints(); // Get the original 2D points from the shape
         
         // convert the direction to 2D by projecting the line into the mesh's frame
-        const inv_tf = intersect_mesh.matrixWorld.clone().invert()
+        const inv_tf = controls.touchMesh.matrixWorld.clone().invert()
         const localMidpoint = worldMidpoint.clone().applyMatrix4(inv_tf)
         const localBluePos = blueSphere.position.clone().applyMatrix4(inv_tf)
         const localRedPos = redSphere.position.clone().applyMatrix4(inv_tf)
@@ -398,8 +420,8 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
         const local_p1 = new vec2(intersections[1].x, intersections[1].y)
         const p0 = new vec3(local_p0.x, local_p0.y, front_side ? PAPER_THICKNESS : 0)
         const p1 = new vec3(local_p1.x, local_p1.y, front_side ? PAPER_THICKNESS : 0)
-        p0.applyMatrix4(intersect_mesh.matrixWorld)
-        p1.applyMatrix4(intersect_mesh.matrixWorld)
+        p0.applyMatrix4(controls.touchMesh.matrixWorld)
+        p1.applyMatrix4(controls.touchMesh.matrixWorld)
 
 
         // Generate two shapes based on the intersections
@@ -409,8 +431,8 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
         const shape1 = new Shape(shape1_verts.map(v => [v.x, v.y]))
         const shape2 = new Shape(shape2_verts.map(v => [v.x, v.y]))
         replace_split_shapes(shape1, shape2)
-        shape1.group.applyMatrix4(intersect_mesh.matrixWorld)
-        shape2.group.applyMatrix4(intersect_mesh.matrixWorld)
+        shape1.group.applyMatrix4(controls.touchMesh.matrixWorld)
+        shape2.group.applyMatrix4(controls.touchMesh.matrixWorld)
         shape1.group.visible = true
         shape2.group.visible = true
 
@@ -455,11 +477,11 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
 
     const apply_fold = () => {
         // delete the current intersected mesh
-        const shape_idx = mesh_to_idx.get(intersect_mesh)
+        const shape_idx = mesh_to_idx.get(controls.touchMesh)
         const intersect_group = shapes[shape_idx].group
         intersect_group.visible = false
         // // scene.remove(intersect_group)
-        intersect_mesh = null
+        // intersect_mesh = null
 
         // this all is traash apparently
         // const shape0 = new Shape(split0.verts.map(v => [v.x, v.y]))
@@ -483,26 +505,36 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
 
 
 
-    const clickmodefalse = _ => updateClickMode(false)
-    const clickmodetrue = _ => updateClickMode(true)
-    window.addEventListener('mouseup', clickmodefalse);
-    window.addEventListener('mousedown', clickmodetrue);
+    // const clickmodefalse = _ => updateClickMode(false)
+    // const clickmodetrue = _ => updateClickMode(true)
+    // window.addEventListener('mouseup', clickmodefalse);
+    // window.addEventListener('mousedown', clickmodetrue);
     window.addEventListener('mousemove', checkIntersect);
     window.addEventListener('mouseup', checkIntersect);
     window.addEventListener('mousedown', checkIntersect);
-    window.addEventListener('mouseup', update_outlines);
-    window.addEventListener('mousedown', update_outlines);
-    window.addEventListener('mousemove', update_outlines);
+    window.addEventListener('touchstart', checkIntersect);
+    window.addEventListener('touchmove', checkIntersect);
+    window.addEventListener('touchend', checkIntersect);
+    // window.addEventListener('mouseup', update_outlines);
+    // window.addEventListener('mousedown', update_outlines);
+    // window.addEventListener('mousemove', update_outlines);
     window.addEventListener('mouseup', update_closest_edge);
     window.addEventListener('mousemove', update_closest_edge);
+    window.addEventListener('mousedown', update_closest_edge);
+    window.addEventListener('touchend', update_closest_edge);
+    window.addEventListener('touchmove', update_closest_edge);
+    window.addEventListener('touchstart', update_closest_edge);
     window.addEventListener('mousedown', draw_dividing_line);
     window.addEventListener('mouseup', draw_dividing_line);
     window.addEventListener('mousemove', draw_dividing_line);
+    window.addEventListener('touchstart', draw_dividing_line);
+    window.addEventListener('touchend', draw_dividing_line);
+    window.addEventListener('touchmove', draw_dividing_line);
 
 
     const update_scene = () => {
         //TODO: replace with click to orbit
-        controls.enableRotate = !would_sphere_be_visible;
+        // controls.enableRotate = !would_sphere_be_visible;
 
         controls.update();
         renderer.render(scene, camera);
@@ -510,19 +542,27 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
 
     const resetter = () => {
         //reset everything so that we can call the scene again from scratch
-        window.removeEventListener('mouseup', clickmodefalse);
-        window.removeEventListener('mousedown', clickmodetrue);
+        // window.removeEventListener('mouseup', clickmodefalse);
+        // window.removeEventListener('mousedown', clickmodetrue);
         window.removeEventListener('mousemove', checkIntersect);
         window.removeEventListener('mouseup', checkIntersect);
         window.removeEventListener('mousedown', checkIntersect);
-        window.removeEventListener('mouseup', update_outlines);
-        window.removeEventListener('mousedown', update_outlines);
-        window.removeEventListener('mousemove', update_outlines);
+        window.removeEventListener('touchstart', checkIntersect);
+        window.removeEventListener('touchmove', checkIntersect);
+        window.removeEventListener('touchend', checkIntersect);
+        // window.removeEventListener('mouseup', update_outlines);
+        // window.removeEventListener('mousedown', update_outlines);
+        // window.removeEventListener('mousemove', update_outlines);
         window.removeEventListener('mouseup', update_closest_edge);
         window.removeEventListener('mousemove', update_closest_edge);
+        window.removeEventListener('touchend', update_closest_edge);
+        window.removeEventListener('touchmove', update_closest_edge);
         window.removeEventListener('mousedown', draw_dividing_line);
         window.removeEventListener('mouseup', draw_dividing_line);
         window.removeEventListener('mousemove', draw_dividing_line);
+        window.removeEventListener('touchstart', draw_dividing_line);
+        window.removeEventListener('touchend', draw_dividing_line);
+        window.removeEventListener('touchmove', draw_dividing_line);
 
         // remove all objects from the scene
         while(scene.children.length > 0){ 
