@@ -10,6 +10,7 @@ lerna-debug.log*
 
 # notes
 notes.txt
+tasks.txt
 
 # packages and build output
 node_modules
