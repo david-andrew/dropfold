@@ -40,7 +40,7 @@ export class OrbitalPointer {
     meshHopping: boolean;
     raycaster = new THREE.Raycaster();
     multitouchTimer: number | null = null;
-    multitouchDelayMs: number
+    multitouchDelayMs: number;
     isInteracting = false;
     interactionSphere: THREE.Mesh;
     touchPoint: THREE.Vector3 | null = null;
@@ -60,7 +60,7 @@ export class OrbitalPointer {
         enablePan = false,
         showPointer = true,
         meshHopping = false,
-        multitouchDelayMs = 20,
+        multitouchDelayMs = 20
     }: OrbitalPointerProps) {
         this.cameraRef = camera;
         this.controls = new OrbitControls(camera, domElement);
@@ -88,8 +88,20 @@ export class OrbitalPointer {
         window.addEventListener('touchend', this.onPointerUp, false);
     }
 
-    setShowPointer = (showPointer: boolean) => {
-        this.showPointer = showPointer;
+    // setShowPointer = (showPointer: boolean) => {
+    //     this.showPointer = showPointer;
+    // };
+
+    updatePointer = (event: MouseEvent | TouchEvent) => {
+        if ('touches' in event) {
+            // Convert touch coordinates to normalized device coordinates
+            this.pointer.x = (event.touches[0].clientX / window.innerWidth) * 2 - 1;
+            this.pointer.y = -(event.touches[0].clientY / window.innerHeight) * 2 + 1;
+        } else {
+            // Convert mouse coordinates to normalized device coordinates
+            this.pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
+            this.pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        }
     };
 
     onPointerDown = (event: MouseEvent | TouchEvent) => {
@@ -101,19 +113,12 @@ export class OrbitalPointer {
         if (isTouch && event.touches.length > 1 && this.multitouchTimer !== null) {
             // Cancel the delayed call if multitouch
             clearTimeout(this.multitouchTimer);
-            this.multitouchTimer = null
+            this.multitouchTimer = null;
             return;
         }
 
-        if (isTouch) {
-            // Convert touch coordinates to normalized device coordinates
-            this.pointer.x = (event.touches[0].clientX / window.innerWidth) * 2 - 1;
-            this.pointer.y = -(event.touches[0].clientY / window.innerHeight) * 2 + 1;
-        } else {
-            // Convert mouse coordinates to normalized device coordinates
-            this.pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
-            this.pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
-        }
+        // Update the pointer position
+        this.updatePointer(event);
 
         // Update the raycaster with the camera and pointer position
         this.raycaster.setFromCamera(this.pointer, this.cameraRef);
@@ -123,10 +128,9 @@ export class OrbitalPointer {
 
         // If no objects are intersected, not an interaction
         if (this.intersects.length === 0) return;
-        
+
         // Start interacting if an object is intersected
-        if (isTouch) 
-        {   
+        if (isTouch) {
             // delayed+cancelable call if touch event
             this.multitouchTimer = setTimeout(() => {
                 this.startInteracting();
@@ -148,23 +152,16 @@ export class OrbitalPointer {
         // Make the interaction sphere visible and position it at the interaction location
         this.interactionSphere.visible = true && this.showPointer;
         this.interactionSphere.position.copy(this.intersects[0].point);
-        
+
         // Call the user-defined callback function if it exists
         this.onPress?.();
-    }
+    };
 
     onPointerMove = (event: MouseEvent | TouchEvent) => {
         if (!this.isInteracting) return;
 
-        if ('touches' in event) {
-            // Convert touch coordinates to normalized device coordinates
-            this.pointer.x = (event.touches[0].clientX / window.innerWidth) * 2 - 1;
-            this.pointer.y = -(event.touches[0].clientY / window.innerHeight) * 2 + 1;
-        } else {
-            // Convert mouse coordinates to normalized device coordinates
-            this.pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
-            this.pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
-        }
+        // Update the pointer position
+        this.updatePointer(event);
 
         // Update the raycaster with the camera and pointer position
         this.raycaster.setFromCamera(this.pointer, this.cameraRef);
@@ -182,6 +179,7 @@ export class OrbitalPointer {
         } else {
             // TODO: want to move the touch point to the closest point on the edge of the mesh
             // ideally it would stay on the face that was touched last
+            // alternatively could have callback to let the client code handle whatever it wants to do here
         }
     };
 
