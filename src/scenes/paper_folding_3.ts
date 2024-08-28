@@ -160,16 +160,16 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
     const sphereGeometry = new THREE.SphereGeometry(0.2, 32, 32);
     const sphereMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
     const redSphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-    redSphere.visible = true//false; // Initially hide the sphere
-    // scene.add(redSphere);
+    redSphere.visible = false; // Initially hide the sphere
+    scene.add(redSphere);
 
 
     // blue sphere setup
     const blueSphereGeometry = new THREE.SphereGeometry(0.2, 32, 32);
     const blueSphereMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
     const blueSphere = new THREE.Mesh(blueSphereGeometry, blueSphereMaterial);
-    blueSphere.visible = true; // Initially hide the sphere
-    // scene.add(blueSphere);
+    blueSphere.visible = false; // Initially hide the sphere
+    scene.add(blueSphere);
 
 
 
@@ -178,7 +178,7 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
     const greenSphereMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
     const greenSphere = new THREE.Mesh(greenSphereGeometry, greenSphereMaterial);
     greenSphere.visible = false; // Initially hide the sphere
-    // scene.add(greenSphere);
+    scene.add(greenSphere);
 
 
     // dividing line setup
@@ -188,7 +188,7 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
     lineMaterial.resolution.set(window.innerWidth, window.innerHeight);
     const dividingLine = new Line2(lineGeometry, lineMaterial);
     dividingLine.visible = false;
-    // scene.add(dividingLine);
+    scene.add(dividingLine);
 
 
     // shape preview setup
@@ -284,6 +284,9 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
     }
     const draw_dividing_line = () => {
         greenSphere.visible = false;
+        blueSphere.visible = false;
+        redSphere.visible = false;
+        dividingLine.visible = false;
         if (!controls.isInteracting) return
         dividingLine.visible = true;
         controls.touchMesh.visible = false
@@ -294,6 +297,9 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
         /// DEBUG draw the green sphere here
         greenSphere.position.copy(worldMidpoint)
         greenSphere.visible = true;
+        blueSphere.visible = true;
+        redSphere.visible = true;
+        dividingLine.visible = true;
 
         // direction from drag point to edge
         const worldDirection = blueSphere.position.clone().sub(redSphere.position).normalize()
