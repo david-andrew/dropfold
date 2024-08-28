@@ -12,6 +12,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
  * @param enablePan - (optional) A boolean to enable panning in orbit controls. Default is false
  * @param showPointer - (optional) A boolean to show a small sphere at the intersection point. Default is true
  * @param meshHopping - (optional) A boolean to allow the pointer to drag over multiple meshes, otherwise restricts to the first mesh hit. Default is false
+ * @param multitouchDelay - (optional) A number in milliseconds within which a multi-touch may be detected. Shorter will feel more responsive, but may  Default is 20
  */
 type OrbitalPointerProps = {
     camera: THREE.Camera;
@@ -23,6 +24,7 @@ type OrbitalPointerProps = {
     enablePan?: boolean;
     showPointer?: boolean;
     meshHopping?: boolean;
+    multitouchDelayMs?: number;
 };
 
 /**
@@ -37,8 +39,9 @@ export class OrbitalPointer {
     showPointer: boolean;
     meshHopping: boolean;
     raycaster = new THREE.Raycaster();
+    multitouchTimer: number | null = null;
+    multitouchDelayMs: number
     isInteracting = false;
-    // prevWasInteracting = false; //TBD, may be useful
     interactionSphere: THREE.Mesh;
     touchPoint: THREE.Vector3 | null = null;
     touchMesh: THREE.Mesh | null = null;
@@ -56,13 +59,15 @@ export class OrbitalPointer {
         onRelease,
         enablePan = false,
         showPointer = true,
-        meshHopping = false
+        meshHopping = false,
+        multitouchDelayMs = 20,
     }: OrbitalPointerProps) {
         this.cameraRef = camera;
         this.controls = new OrbitControls(camera, domElement);
         this.controls.enablePan = enablePan;
         this.showPointer = showPointer;
         this.meshHopping = meshHopping;
+        this.multitouchDelayMs = multitouchDelayMs;
         this.getInteractables = getInteractables;
         this.onPress = onPress;
         this.onRelease = onRelease;
@@ -90,7 +95,17 @@ export class OrbitalPointer {
     onPointerDown = (event: MouseEvent | TouchEvent) => {
         event.preventDefault();
 
-        if ('touches' in event) {
+        const isTouch = 'touches' in event;
+
+        // detect if this is a multitouch event (i.e. default to orbit controls)
+        if (isTouch && event.touches.length > 1 && this.multitouchTimer !== null) {
+            // Cancel the delayed call if multitouch
+            clearTimeout(this.multitouchTimer);
+            this.multitouchTimer = null
+            return;
+        }
+
+        if (isTouch) {
             // Convert touch coordinates to normalized device coordinates
             this.pointer.x = (event.touches[0].clientX / window.innerWidth) * 2 - 1;
             this.pointer.y = -(event.touches[0].clientY / window.innerHeight) * 2 + 1;
@@ -106,8 +121,24 @@ export class OrbitalPointer {
         // Calculate objects intersecting the picking ray
         this.intersects = this.raycaster.intersectObjects(this.getInteractables());
 
+        // If no objects are intersected, not an interaction
         if (this.intersects.length === 0) return;
         
+        // Start interacting if an object is intersected
+        if (isTouch) 
+        {   
+            // delayed+cancelable call if touch event
+            this.multitouchTimer = setTimeout(() => {
+                this.startInteracting();
+                this.multitouchTimer = null;
+            }, this.multitouchDelayMs);
+        } else {
+            // immediate call if click
+            this.startInteracting();
+        }
+    };
+
+    startInteracting = () => {
         // Disable orbit controls if the cube is touched/clicked
         this.controls.enabled = false;
         this.isInteracting = true;
@@ -120,7 +151,7 @@ export class OrbitalPointer {
         
         // Call the user-defined callback function if it exists
         this.onPress?.();
-    };
+    }
 
     onPointerMove = (event: MouseEvent | TouchEvent) => {
         if (!this.isInteracting) return;
@@ -155,7 +186,6 @@ export class OrbitalPointer {
     };
 
     onPointerUp = () => {
-        // this.isClicking = false;
         if (!this.isInteracting) return;
 
         // Re-enable orbit controls when the interaction ends
