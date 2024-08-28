@@ -21,6 +21,7 @@ type edge = {
 }
 
 const PAPER_THICKNESS = 0.01
+const SHOW_DEBUG_GEOMETRY = false
 
 class Shape {
     // TODO: maybe have tf: THREE.Matrix4
@@ -122,7 +123,7 @@ const make_axis_helper = ({thickness = 10, length = 5} = {}) => {
 
 export const general_folding_scene = (seed_shape: Array<[number, number]>) => (renderer: THREE.WebGLRenderer): SceneFunctions => {
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87ceeb); // sky blue background
+    scene.background = new THREE.Color(0x333333)//(0x87ceeb); // sky blue background
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.z = 15;
 
@@ -130,17 +131,9 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
     // const axisHelper = make_axis_helper()
     // scene.add(axisHelper);
 
-    // Paper setup
-    // const geometry = new THREE.BoxGeometry(8.5, 11, 0.01);
-    // geometry.translate(0, 0, -0.005); // Move the paper slightly back so it doesn't overlap with the shape
-    // const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
-    // const paper = new THREE.Mesh(geometry, material);
-    // scene.add(paper);
 
 
     //////// GENERATE PAPER IN SCENE ////////
-    // shapes.push(new Shape([[-8.5/2, 11/2], [8.5/2, 11/2], [8.5/2, -11/2], [-8.5/2, -11/2]]))
-    // shapes.push(new Shape([[0, 10], [9.511, 3.09], [5.878, -8.09], [-5.878, -8.09], [-9.511, 3.09]]))
     shapes.push(new Shape(seed_shape))
     shapes[0].group.position.z = -0.1
     // for (let i = 1; i < 10; i++) {
@@ -161,7 +154,7 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
     const sphereMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
     const redSphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
     redSphere.visible = false; // Initially hide the sphere
-    scene.add(redSphere);
+    if (SHOW_DEBUG_GEOMETRY) { scene.add(redSphere); }
 
 
     // blue sphere setup
@@ -169,7 +162,7 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
     const blueSphereMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
     const blueSphere = new THREE.Mesh(blueSphereGeometry, blueSphereMaterial);
     blueSphere.visible = false; // Initially hide the sphere
-    scene.add(blueSphere);
+    if (SHOW_DEBUG_GEOMETRY) { scene.add(blueSphere); }
 
 
 
@@ -178,7 +171,7 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
     const greenSphereMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
     const greenSphere = new THREE.Mesh(greenSphereGeometry, greenSphereMaterial);
     greenSphere.visible = false; // Initially hide the sphere
-    scene.add(greenSphere);
+    if (SHOW_DEBUG_GEOMETRY) { scene.add(greenSphere); }
 
 
     // dividing line setup
@@ -188,7 +181,7 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
     lineMaterial.resolution.set(window.innerWidth, window.innerHeight);
     const dividingLine = new Line2(lineGeometry, lineMaterial);
     dividingLine.visible = false;
-    scene.add(dividingLine);
+    if (SHOW_DEBUG_GEOMETRY) { scene.add(dividingLine); }
 
 
     // shape preview setup
@@ -302,7 +295,7 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
         dividingLine.visible = true;
 
         // direction from drag point to edge
-        const worldDirection = blueSphere.position.clone().sub(redSphere.position).normalize()
+        // const worldDirection = blueSphere.position.clone().sub(redSphere.position).normalize()
         
         //for each edge on the intersected mesh, determine the point of intersection (if any) with the dividing plane
         const shape_idx = mesh_to_idx.get(controls.touchMesh)
