@@ -149,39 +149,15 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
     sync_mesh_map()
     
 
-    // Red sphere setup
-    const sphereGeometry = new THREE.SphereGeometry(0.2, 32, 32);
-    const sphereMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-    const redSphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-    redSphere.visible = false; // Initially hide the sphere
-    if (SHOW_DEBUG_GEOMETRY) { scene.add(redSphere); }
+    // Vectors for keeping track of actions
+    let from_point: vec3 = new THREE.Vector3();  // blue sphere
+    let mid_point: vec3 = new THREE.Vector3();   // green sphere
+    let to_point: vec3 = new THREE.Vector3();    // red sphere
+    let p0: vec3 = new THREE.Vector3(); // start of dividing line
+    let p1: vec3 = new THREE.Vector3(); // end of dividing line
 
-
-    // blue sphere setup
-    const blueSphereGeometry = new THREE.SphereGeometry(0.2, 32, 32);
-    const blueSphereMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
-    const blueSphere = new THREE.Mesh(blueSphereGeometry, blueSphereMaterial);
-    blueSphere.visible = false; // Initially hide the sphere
-    if (SHOW_DEBUG_GEOMETRY) { scene.add(blueSphere); }
-
-
-
-    // green sphere setup
-    const greenSphereGeometry = new THREE.SphereGeometry(0.2, 32, 32);
-    const greenSphereMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-    const greenSphere = new THREE.Mesh(greenSphereGeometry, greenSphereMaterial);
-    greenSphere.visible = false; // Initially hide the sphere
-    if (SHOW_DEBUG_GEOMETRY) { scene.add(greenSphere); }
-
-
-    // dividing line setup
-    const lineGeometry = new LineGeometry();
-    lineGeometry.setPositions([-10, -10, 0, 10, 10, 0]);
-    const lineMaterial = new LineMaterial({ color: 0xff00ff, linewidth: 10, dashed: false });
-    lineMaterial.resolution.set(window.innerWidth, window.innerHeight);
-    const dividingLine = new Line2(lineGeometry, lineMaterial);
-    dividingLine.visible = false;
-    if (SHOW_DEBUG_GEOMETRY) { scene.add(dividingLine); }
+    // debug geometry setup
+    const { hide_debug_geometry, show_debug_geometry } = setup_debug_geometry(scene, SHOW_DEBUG_GEOMETRY)
 
 
     // shape preview setup
@@ -238,7 +214,7 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
         if (controls.touchMesh !== null) controls.touchMesh.visible = true;
 
         if (controls.isInteracting) {
-            redSphere.position.copy(controls.touchPoint);
+            to_point.copy(controls.touchPoint);
         }
     }
    
@@ -272,29 +248,21 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
                 bestPoint = closest
             }
         }
-        blueSphere.position.copy(bestPoint)
+        from_point.copy(bestPoint)
     }
     const draw_dividing_line = () => {
-        greenSphere.visible = false;
-        blueSphere.visible = false;
-        redSphere.visible = false;
-        dividingLine.visible = false;
+        hide_debug_geometry()
         if (!controls.isInteracting) return
-        dividingLine.visible = true;
-        controls.touchMesh.visible = false
-        // intersect_mesh.visible = false; //TODO where do we set this visible again
+        controls.touchMesh.visible = false // a bit hacky. hide the original mesh that is being folded
+
         // determine the point on the dividing plane:
-        const worldMidpoint = redSphere.position.clone().add(blueSphere.position).divideScalar(2)
+        const worldMidpoint = to_point.clone().add(from_point).divideScalar(2)
 
         /// DEBUG draw the green sphere here
-        greenSphere.position.copy(worldMidpoint)
-        greenSphere.visible = true;
-        blueSphere.visible = true;
-        redSphere.visible = true;
-        dividingLine.visible = true;
+        mid_point.copy(worldMidpoint)
 
         // direction from drag point to edge
-        // const worldDirection = blueSphere.position.clone().sub(redSphere.position).normalize()
+        // const worldDirection = from_point.clone().sub(to_point).normalize()
         
         //for each edge on the intersected mesh, determine the point of intersection (if any) with the dividing plane
         const shape_idx = mesh_to_idx.get(controls.touchMesh)
@@ -304,8 +272,8 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
         // convert the direction to 2D by projecting the line into the mesh's frame
         const inv_tf = controls.touchMesh.matrixWorld.clone().invert()
         const localMidpoint = worldMidpoint.clone().applyMatrix4(inv_tf)
-        const localBluePos = blueSphere.position.clone().applyMatrix4(inv_tf)
-        const localRedPos = redSphere.position.clone().applyMatrix4(inv_tf)
+        const localBluePos = from_point.clone().applyMatrix4(inv_tf)
+        const localRedPos = to_point.clone().applyMatrix4(inv_tf)
 
         const localDirection = localBluePos.clone().sub(localRedPos).normalize()
         const point2d = new vec2(localMidpoint.x, localMidpoint.y)
@@ -325,7 +293,7 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
             }
         }
         if (intersections.length < 2) {
-            dividingLine.visible = false;
+            // dividingLine.visible = false;
             return
         }
         if (intersections.length > 2) {
@@ -338,8 +306,8 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
         // convert intersections to world space
         const local_p0 = new vec2(intersections[0].x, intersections[0].y)
         const local_p1 = new vec2(intersections[1].x, intersections[1].y)
-        const p0 = new vec3(local_p0.x, local_p0.y, front_side ? PAPER_THICKNESS : 0)
-        const p1 = new vec3(local_p1.x, local_p1.y, front_side ? PAPER_THICKNESS : 0)
+        p0 = new vec3(local_p0.x, local_p0.y, front_side ? PAPER_THICKNESS : 0)
+        p1 = new vec3(local_p1.x, local_p1.y, front_side ? PAPER_THICKNESS : 0)
         p0.applyMatrix4(controls.touchMesh.matrixWorld)
         p1.applyMatrix4(controls.touchMesh.matrixWorld)
 
@@ -360,7 +328,7 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
 
         // determine which shape contains the red sphere via a raycast
         const raycaster = new THREE.Raycaster()
-        const screenRedPos = redSphere.position.clone().project(camera)
+        const screenRedPos = to_point.clone().project(camera)
         raycaster.setFromCamera(new vec2(screenRedPos.x, screenRedPos.y), camera)
         const intersects = raycaster.intersectObjects([shape1.prism, shape2.prism])
         const shape1_contains = intersects.length > 0 && intersects[0].object === shape1.prism
@@ -387,11 +355,7 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
         
 
         //debug
-        // dividingLine.geometry.setPositions([point.x, point.y, point.z, point.x + direction.x, point.y + direction.y, point.z + direction.z])
-        dividingLine.geometry.setPositions([p0.x, p0.y, p0.z, p1.x, p1.y, p1.z])
-        dividingLine.visible = true;
-        // const direction2d = new vec2(direction.x, direction.y)
-
+        show_debug_geometry(from_point, mid_point, to_point, p0, p1)
     }
 
 
@@ -421,6 +385,7 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
     }
 
 
+   
 
 
 
@@ -517,4 +482,69 @@ const getLineIntersection = (segment: {A: vec2, B: vec2}, line: {C: vec2, D: vec
     }
 
     return null; // No intersection within the segment
+}
+
+
+
+
+
+
+
+
+const setup_debug_geometry = (scene: THREE.Scene, debug: boolean) => {
+    if (!debug) {
+        return {hide_debug_geometry: () => {}, show_debug_geometry: () => {}}
+    }
+
+    // Red sphere setup
+    const sphereGeometry = new THREE.SphereGeometry(0.2, 32, 32);
+    const sphereMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    const redSphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+    redSphere.visible = false; // Initially hide the sphere
+    scene.add(redSphere);
+
+    // blue sphere setup
+    const blueSphereGeometry = new THREE.SphereGeometry(0.2, 32, 32);
+    const blueSphereMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
+    const blueSphere = new THREE.Mesh(blueSphereGeometry, blueSphereMaterial);
+    blueSphere.visible = false; // Initially hide the sphere
+    scene.add(blueSphere);
+
+    // green sphere setup
+    const greenSphereGeometry = new THREE.SphereGeometry(0.2, 32, 32);
+    const greenSphereMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+    const greenSphere = new THREE.Mesh(greenSphereGeometry, greenSphereMaterial);
+    greenSphere.visible = false; // Initially hide the sphere
+    scene.add(greenSphere);
+
+    // dividing line setup
+    const lineGeometry = new LineGeometry();
+    lineGeometry.setPositions([-10, -10, 0, 10, 10, 0]);
+    const lineMaterial = new LineMaterial({ color: 0xff00ff, linewidth: 10, dashed: false });
+    lineMaterial.resolution.set(window.innerWidth, window.innerHeight);
+    const dividingLine = new Line2(lineGeometry, lineMaterial);
+    dividingLine.visible = false;
+    scene.add(dividingLine);
+
+    const hide_debug_geometry = () => {            
+        // set the visibility of the debug geometry
+        redSphere.visible = false
+        blueSphere.visible = false
+        greenSphere.visible = false
+        dividingLine.visible = false
+    }
+    const show_debug_geometry = (from_point: vec3, mid_point: vec3, to_point: vec3, p0: vec3, p1: vec3) => {
+        // set the visibility of the debug geometry
+        redSphere.visible = true
+        blueSphere.visible = true
+        greenSphere.visible = true
+        dividingLine.visible = true
+
+        redSphere.position.copy(to_point)
+        blueSphere.position.copy(from_point)
+        greenSphere.position.copy(mid_point)
+        dividingLine.geometry.setPositions([p0.x, p0.y, p0.z, p1.x, p1.y, p1.z])
+    }
+
+    return {hide_debug_geometry, show_debug_geometry}
 }
