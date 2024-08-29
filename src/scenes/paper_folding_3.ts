@@ -244,9 +244,8 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
    
 
     const update_closest_edge = () => {
-        if (folding) return
+        if (folding || controls.touchMesh === null) return
         const shape_idx = mesh_to_idx.get(controls.touchMesh)
-        console.assert(shape_idx !== undefined)
         const shape = shapes[shape_idx]
 
         const shapeVertices = shape.shape.getPoints(); // Get the original 2D points from the shape
