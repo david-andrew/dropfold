@@ -6,7 +6,7 @@ const vec2 = (a:number, b:number) => new THREE.Vector2(a, b);
 
 type Facet = {
     vertices: THREE.Vector2[],
-    links: ([number, number] | null)[]
+    links: ([number, number] | null)[]  // [layer-offset, linked-facet-index]. edge index of target facet can be determined by looking at the facet's connections and finding the one that matches up to the source facet
 }
 
 type Layer = Facet[];
@@ -33,8 +33,7 @@ const states: Thing[] = [
         ],
         [
             {
-                // TODO: specify tf, 180 degrees over edge 0
-                vertices: [vec2(-4.25, 1.25), vec2(0, 5.5), vec2(-4.25, 5.5)],
+                vertices: [vec2(-4.25, 1.25), vec2(0, 5.5), vec2(0, 1.25)],
                 links: [[-1, 0], null, null]
             }
         ]
@@ -50,16 +49,40 @@ const states: Thing[] = [
         ],
         [
             {
-                // TODO: specify tf, 180 degrees over edge 0
-                vertices: [vec2(-4.25, 1.25), vec2(0, 5.5), vec2(-4.25, 5.5)],
+                vertices: [vec2(-4.25, 1.25), vec2(0, 5.5), vec2(0, 1.25)],
                 links: [[-1, 0], null, null]
             },
             {
-                // TODO: specify tf, 180 degrees over edge 2
-                vertices: [vec2(0, 5.5), vec2(4.25, 5.5), vec2(4.25, 1.25)],
+                vertices: [vec2(0, 5.5), vec2(0, 1.25), vec2(4.25, 1.25)],
                 links: [null, null, [-1, 0]]
             }
         ]
 
+    ],
+
+    // state 4
+    [
+        [
+            {
+                vertices: [vec2(-4.25, 1.25), vec2(4.25, 1.25), vec2(4.25, -5.5), vec2(-4.25, -5.5)],
+                links: [[2, 0], null, null, null]
+            }
+        ],
+        [
+            {
+                vertices: [vec2(-4.25, 1.25), vec2(0, 1.25), vec2(0, -4.25)],
+                links: [null, null, [1, 0]]
+            },
+            {
+                vertices: [vec2(0, -4.25), vec2(0, 1.25), vec2(4.25, 1.25)],
+                links: [null, null, [1, 0]]
+            }
+        ],
+        [
+            {
+                vertices: [vec2(-4.25, 1.25), vec2(4.25, 1.25), vec2(0, -4.25)],
+                links: [null, null, null]
+            }
+        ]
     ]
 ]
