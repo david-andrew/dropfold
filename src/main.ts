@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import {general_folding_scene} from './scenes/paper_folding_3';
 import {rotating_cube_scene} from './scenes/rotating_cube';
 import { test_touch_controls_scene } from './scenes/touch_controls_testing';
+import { clipping_plane_demo } from './scenes/clipping_plane_demo';
 
 // Find the div with id 'GameView'
 const gameView = document.getElementById('GameView') as HTMLDivElement;
@@ -16,6 +17,7 @@ export type SceneFunctions = {
 
 const main = (scene_fn: (renderer) => SceneFunctions) => {
     const renderer = new THREE.WebGLRenderer();
+    renderer.localClippingEnabled = true;
     renderer.setSize(window.innerWidth, window.innerHeight);
     gameView.appendChild(renderer.domElement);
 
@@ -63,13 +65,14 @@ const scene_selector_main = () => {
         '4': general_folding_scene([[0, 3], [-8.66, -5], [4.22, -5]]),
         '5': general_folding_scene([[0, 10], [10, 5], [5, -10], [0,-10], [-10, 0], [-5, 10]]),
         '6': test_touch_controls_scene,
+        '7': clipping_plane_demo,
         
 
 
     }
 
     // default call scene
-    let resetter = main(scene_button_map['1']);
+    let resetter = main(scene_button_map['7']);
 
     // event listener for keypresses
     document.addEventListener('keydown', (event) => {
