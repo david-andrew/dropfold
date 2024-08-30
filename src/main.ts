@@ -72,7 +72,7 @@ const scene_selector_main = () => {
     }
 
     // default call scene
-    let resetter = main(scene_button_map['7']);
+    let resetter = main(scene_button_map['1']);
 
     // event listener for keypresses
     document.addEventListener('keydown', (event) => {
