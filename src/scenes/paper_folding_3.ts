@@ -33,7 +33,7 @@ class Shape {
     outline_material: THREE.LineBasicMaterial
     group: THREE.Group
 
-    constructor(verts: Array<[number, number]>) {
+    constructor(verts: Array<[number, number]>, paper_color:number, outline_color:number) {
         this.verts = verts.map(v => new THREE.Vector2(v[0], v[1]))
         this.shape = new THREE.Shape();
         this.edges = []
@@ -50,11 +50,11 @@ class Shape {
         };
 
         const geometry = new THREE.ExtrudeGeometry(this.shape, extrudeSettings);
-        const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const material = new THREE.MeshBasicMaterial({ color: paper_color });
         this.prism = new THREE.Mesh(geometry, material);
 
         const edgesGeometry = new THREE.EdgesGeometry(geometry);
-        this.outline_material = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 1 }); // Faint blue outline
+        this.outline_material = new THREE.LineBasicMaterial({ color: outline_color }); // Faint blue outline
         this.outline = new THREE.LineSegments(edgesGeometry, this.outline_material);
         // this.outline.visible = false;
 
@@ -121,9 +121,16 @@ const make_axis_helper = ({thickness = 10, length = 5} = {}) => {
 }
 
 
-export const general_folding_scene = (seed_shape: Array<[number, number]>) => (renderer: THREE.WebGLRenderer): SceneFunctions => {
+// type SceneProps = {
+//     seed_shape: Array<[number, number]>
+//     paper_color?: number
+//     background_color?: number
+//     outline_color?: number
+// }
+
+export const general_folding_scene = (seed_shape: Array<[number, number]>, paper_color:number=0xffffff, background_color:number=0x87ceeb, outline_color:number=0x000000) => (renderer: THREE.WebGLRenderer): SceneFunctions => {
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x333333)//(0x87ceeb); // sky blue background
+    scene.background = new THREE.Color(background_color);//(0x333333)//(0x87ceeb); // sky blue background
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.z = 15;
 
@@ -134,7 +141,7 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
 
 
     //////// GENERATE PAPER IN SCENE ////////
-    shapes.push(new Shape(seed_shape))
+    shapes.push(new Shape(seed_shape, paper_color, outline_color))
     shapes[0].group.position.z = -0.1
     // for (let i = 1; i < 10; i++) {
     //     const shape = new Shape([[-1,1], [1,1], [1,-1], [-1,-1]])
@@ -161,8 +168,8 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
 
 
     // shape preview setup
-    let split0 = new Shape([[-1,1], [1,1], [1,-1], [-1,-1]])
-    let split1 = new Shape([[-1,1], [1,1], [1,-1], [-1,-1]])
+    let split0 = new Shape([[-1,1], [1,1], [1,-1], [-1,-1]], paper_color, outline_color)
+    let split1 = new Shape([[-1,1], [1,1], [1,-1], [-1,-1]], paper_color, outline_color)
     const reset_split_shapes = () => {
         scene.add(split0.group)
         scene.add(split1.group)
@@ -252,7 +259,7 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
     }
     const draw_dividing_line = () => {
         hide_debug_geometry()
-        if (!controls.isInteracting) return
+        if (!controls.isInteracting || controls.touchPoint === null) return
         controls.touchMesh.visible = false // a bit hacky. hide the original mesh that is being folded
 
         // determine the point on the dividing plane:
@@ -316,8 +323,8 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>) => (r
         const [idx0, idx1] = intersect_idxs
         const shape1_verts = [local_p0, ...shapeVertices.slice(idx0+1, idx1+1), local_p1]
         const shape2_verts = [local_p1, ...shapeVertices.slice(idx1+1, shapeVertices.length), ...shapeVertices.slice(0, idx0+1), local_p0]        
-        const shape1 = new Shape(shape1_verts.map(v => [v.x, v.y]))
-        const shape2 = new Shape(shape2_verts.map(v => [v.x, v.y]))
+        const shape1 = new Shape(shape1_verts.map(v => [v.x, v.y]), paper_color, outline_color)
+        const shape2 = new Shape(shape2_verts.map(v => [v.x, v.y]), paper_color, outline_color)
         replace_split_shapes(shape1, shape2)
         shape1.group.applyMatrix4(controls.touchMesh.matrixWorld)
         shape2.group.applyMatrix4(controls.touchMesh.matrixWorld)
