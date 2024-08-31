@@ -5,6 +5,7 @@ import {general_folding_scene} from './scenes/paper_folding_3';
 import {rotating_cube_scene} from './scenes/rotating_cube';
 import { test_touch_controls_scene } from './scenes/touch_controls_testing';
 import { clipping_plane_demo } from './scenes/clipping_plane_demo';
+import { business_card } from './scenes/business_card';
 
 // Find the div with id 'GameView'
 const gameView = document.getElementById('GameView') as HTMLDivElement;
@@ -53,33 +54,37 @@ const main = (scene_fn: (renderer) => SceneFunctions) => {
 }
 
 
+type SceneFactory = (renderer: THREE.WebGLRenderer) => SceneFunctions;
 
 const scene_selector_main = () => {
     // listen for buttonpresses and reset everything if a button is pressed
     // if user presses 1 on keyboard, then run rotating_cube_scene, if 2, then run paper_folding_scene, etc.
-    const scene_button_map = {
-        '0': rotating_cube_scene,
-        '1': general_folding_scene([[-8.5/2, 11/2], [8.5/2, 11/2], [8.5/2, -11/2], [-8.5/2, -11/2]]),
-        '2': general_folding_scene([[0, 10], [9.511, 3.09], [5.878, -8.09], [-5.878, -8.09], [-9.511, 3.09]]),
-        '3': general_folding_scene([[10, 0], [5, 8.66], [-5, 8.66], [-10, 0], [-5, -8.66], [5, -8.66]]),
-        '4': general_folding_scene([[0, 3], [-8.66, -5], [4.22, -5]]),
-        '5': general_folding_scene([[0, 10], [10, 5], [5, -10], [0,-10], [-10, 0], [-5, 10]]),
-        '6': test_touch_controls_scene,
-        '7': clipping_plane_demo,
-        
-
-
-    }
+    const scenes: SceneFactory[] = [
+        rotating_cube_scene,
+        general_folding_scene([[-8.5/2, 11/2], [8.5/2, 11/2], [8.5/2, -11/2], [-8.5/2, -11/2]]),
+        general_folding_scene([[0, 10], [9.511, 3.09], [5.878, -8.09], [-5.878, -8.09], [-9.511, 3.09]]),
+        general_folding_scene([[10, 0], [5, 8.66], [-5, 8.66], [-10, 0], [-5, -8.66], [5, -8.66]]),
+        general_folding_scene([[0, 3], [-8.66, -5], [4.22, -5]]),
+        general_folding_scene([[0, 10], [10, 5], [5, -10], [0,-10], [-10, 0], [-5, 10]]),
+        test_touch_controls_scene,
+        clipping_plane_demo,
+        business_card,    
+    ]
+    console.assert(scenes.length <= 10, "Too many scenes included. Extra scenes will not be accessible via keyboard shortcuts.");
+    const scene_button_map: Map<string, SceneFactory> = new Map<string, SceneFactory>();
+    scenes.forEach((scene, i) => {
+        scene_button_map.set((i).toString(), scene);
+    });
 
     // default call scene
-    let resetter = main(scene_button_map['1']);
+    let resetter = main(scene_button_map.get('1'));
 
     // event listener for keypresses
     document.addEventListener('keydown', (event) => {
         const key = event.key;
-        if (key in scene_button_map) {
+        if (scene_button_map.has(key)) {
             resetter();
-            resetter = main(scene_button_map[key]);
+            resetter = main(scene_button_map.get(key));
         }
     });
 }
