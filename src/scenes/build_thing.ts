@@ -13,6 +13,8 @@ type FacetProps = {
 }
 
 const LAYER_THICKNESS = 0.01;
+const EDGE_COLOR: THREE.ColorRepresentation = 0xffffff;
+const FACE_COLOR: THREE.ColorRepresentation = 0x000000;
 
 class Facet {
     mesh: THREE.Mesh;
@@ -90,7 +92,7 @@ export const build_thing_scene = (renderer: THREE.WebGLRenderer): SceneFunctions
     const group = new THREE.Group();
     const facets: Facet[] = [];
     thing_t.forEach((layer, i) => layer.forEach(facet_t => {
-        const f = new Facet({vertices: facet_t.vertices, z_offset: i*LAYER_THICKNESS, color: 0x000000, edge_color: 0xffffff});
+        const f = new Facet({vertices: facet_t.vertices, z_offset: i*LAYER_THICKNESS, color: FACE_COLOR, edge_color: EDGE_COLOR});
         facets.push(f);
         group.add(f.mesh);
         group.add(f.lines);
@@ -106,8 +108,8 @@ export const build_thing_scene = (renderer: THREE.WebGLRenderer): SceneFunctions
                 p1: facet_t.vertices[(j + 1) % facet_t.vertices.length],
                 thickness: layer_offset*LAYER_THICKNESS,
                 z_offset: i*LAYER_THICKNESS,
-                color: 0x000000,
-                edge_color: 0xffffff
+                color: FACE_COLOR,
+                edge_color: EDGE_COLOR
             });
             group.add(edge.mesh);
             group.add(edge.lines);
