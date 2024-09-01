@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+//TODO: add a disable interact mode (i.e. can still orbit, but not drag)
+
 /**
  * Arguments passed to the OrbitalPointer constructor
  * @param camera - The camera object to be used for raycasting
