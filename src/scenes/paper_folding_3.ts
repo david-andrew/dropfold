@@ -128,7 +128,7 @@ const make_axis_helper = ({thickness = 10, length = 5} = {}) => {
 //     outline_color?: number
 // }
 
-export const general_folding_scene = (seed_shape: Array<[number, number]>, paper_color:number=0xffffff, background_color:number=0x87ceeb, outline_color:number=0x000000) => (renderer: THREE.WebGLRenderer): SceneFunctions => {
+export const general_folding_scene = (seed_shape: Array<[number, number]>, paper_color:number=0xffffff, background_color:number=/*0x87ceeb*/0x222222, outline_color:number=0x000000) => (renderer: THREE.WebGLRenderer): SceneFunctions => {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(background_color);//(0x333333)//(0x87ceeb); // sky blue background
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
