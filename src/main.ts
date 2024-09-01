@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 // import {general_folding_scene} from './scenes/paper_folding';
 // import { general_folding_scene } from './scenes/paper_folding_2';
-import {general_folding_scene} from './scenes/paper_folding_3';
-import {rotating_cube_scene} from './scenes/rotating_cube';
+import { general_folding_scene } from './scenes/paper_folding_3';
+import { rotating_cube_scene } from './scenes/rotating_cube';
 import { test_touch_controls_scene } from './scenes/touch_controls_testing';
 import { clipping_plane_demo } from './scenes/clipping_plane_demo';
 import { business_card } from './scenes/business_card';
@@ -14,11 +14,11 @@ const DEFAULT_SCENE_KEY: SceneKey = '1';
 // Find the div with id 'GameView'
 const gameView = document.getElementById('GameView') as HTMLDivElement;
 
-export type SceneFunctions = { 
-    update_scene: () => void, 
-    camera: THREE.PerspectiveCamera,
-    resetter: () => void
-}
+export type SceneFunctions = {
+    update_scene: () => void;
+    camera: THREE.PerspectiveCamera;
+    resetter: () => void;
+};
 
 const main = (scene_fn: (renderer) => SceneFunctions) => {
     const renderer = new THREE.WebGLRenderer();
@@ -30,12 +30,12 @@ const main = (scene_fn: (renderer) => SceneFunctions) => {
     const on_resize = () => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
-    }
+    };
 
     const animate = () => {
         requestAnimationFrame(animate);
         update_scene();
-    }
+    };
     animate();
 
     // Adjust the scene when the window is resized
@@ -52,17 +52,17 @@ const main = (scene_fn: (renderer) => SceneFunctions) => {
         document.removeEventListener('keydown', resetter);
 
         resetter();
-
-    }
+    };
     return reset;
-}
-
+};
 
 type SceneFactory = (renderer: THREE.WebGLRenderer) => SceneFunctions;
 
 const scene_selector_main = () => {
     // listen for buttonpresses and reset everything if a button is pressed
     // if user presses 1 on keyboard, then run rotating_cube_scene, if 2, then run paper_folding_scene, etc.
+
+    // prettier-ignore
     const scenes: SceneFactory[] = [
         rotating_cube_scene,
         general_folding_scene([[-8.5/2, 11/2], [8.5/2, 11/2], [8.5/2, -11/2], [-8.5/2, -11/2]]),
@@ -75,7 +75,7 @@ const scene_selector_main = () => {
         business_card, 
         build_thing_scene,   
     ]
-    console.assert(scenes.length <= 10, "Too many scenes included. Extra scenes will not be accessible via keyboard shortcuts.");
+    console.assert(scenes.length <= 10, 'Too many scenes included. Extra scenes will not be accessible via keyboard shortcuts.');
     const scene_button_map: Map<SceneKey, SceneFactory> = new Map<SceneKey, SceneFactory>();
     scenes.forEach((scene, i) => {
         const key = i.toString() as SceneKey;
@@ -93,9 +93,8 @@ const scene_selector_main = () => {
             resetter = main(scene_button_map.get(key));
         }
     });
-}
-
-scene_selector_main();
+};
 
 // must be called last
+scene_selector_main();
 // main();
