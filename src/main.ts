@@ -8,6 +8,9 @@ import { clipping_plane_demo } from './scenes/clipping_plane_demo';
 import { business_card } from './scenes/business_card';
 import { build_thing_scene } from './scenes/build_thing';
 
+type SceneKey = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '0';
+const DEFAULT_SCENE_KEY: SceneKey = '1';
+
 // Find the div with id 'GameView'
 const gameView = document.getElementById('GameView') as HTMLDivElement;
 
@@ -73,17 +76,18 @@ const scene_selector_main = () => {
         build_thing_scene,   
     ]
     console.assert(scenes.length <= 10, "Too many scenes included. Extra scenes will not be accessible via keyboard shortcuts.");
-    const scene_button_map: Map<string, SceneFactory> = new Map<string, SceneFactory>();
+    const scene_button_map: Map<SceneKey, SceneFactory> = new Map<SceneKey, SceneFactory>();
     scenes.forEach((scene, i) => {
-        scene_button_map.set((i).toString(), scene);
+        const key = i.toString() as SceneKey;
+        scene_button_map.set(key, scene);
     });
 
     // default call scene
-    let resetter = main(scene_button_map.get('1'));
+    let resetter = main(scene_button_map.get(DEFAULT_SCENE_KEY));
 
     // event listener for keypresses
     document.addEventListener('keydown', (event) => {
-        const key = event.key;
+        const key = event.key as SceneKey;
         if (scene_button_map.has(key)) {
             resetter();
             resetter = main(scene_button_map.get(key));
