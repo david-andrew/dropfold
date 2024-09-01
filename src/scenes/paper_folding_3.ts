@@ -35,37 +35,19 @@ class Shape {
 
     constructor(verts: Array<[number, number]>, paper_color:number, outline_color:number) {
         this.verts = verts.map(v => new THREE.Vector2(v[0], v[1]))
-        this.shape = new THREE.Shape();
+        this.shape = new THREE.Shape(this.verts);
         this.edges = []
-        this.shape.moveTo(this.verts[0].x, this.verts[0].y);
-        for (let i = 1; i < verts.length; i++) {
-            this.shape.lineTo(this.verts[i].x, this.verts[i].y);
-            this.edges.push({a: this.verts[i-1], b: this.verts[i]})
-        }
-        this.shape.lineTo(this.verts[0].x, this.verts[0].y); // Close the shape
-        const extrudeSettings = {
-            steps: 1,
-            depth: PAPER_THICKNESS, //0.01,  // How far to extrude the shape
-            bevelEnabled: false  // Disable bevel for a sharp edge
-        };
-
-        const geometry = new THREE.ExtrudeGeometry(this.shape, extrudeSettings);
-        const material = new THREE.MeshBasicMaterial({ color: paper_color });
+        const geometry = new THREE.ShapeGeometry(this.shape)
+        const material = new THREE.MeshBasicMaterial({ color: paper_color, side: THREE.DoubleSide });
         this.prism = new THREE.Mesh(geometry, material);
 
         const edgesGeometry = new THREE.EdgesGeometry(geometry);
-        this.outline_material = new THREE.LineBasicMaterial({ color: outline_color }); // Faint blue outline
+        this.outline_material = new THREE.LineBasicMaterial({ color: outline_color });
         this.outline = new THREE.LineSegments(edgesGeometry, this.outline_material);
-        // this.outline.visible = false;
 
         this.group = new THREE.Group()
         this.group.add(this.prism)
         this.group.add(this.outline)
-    }
-
-
-    setOutline(visible: boolean) {
-        // this.outline_material.color.set(visible ? 0xff0000 : 0x000000)
     }
 }
 
@@ -142,7 +124,6 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>, paper
 
     //////// GENERATE PAPER IN SCENE ////////
     shapes.push(new Shape(seed_shape, paper_color, outline_color))
-    shapes[0].group.position.z = -0.1
     // for (let i = 1; i < 10; i++) {
     //     const shape = new Shape([[-1,1], [1,1], [1,-1], [-1,-1]])
     //     shape.group.position.z = i
@@ -168,24 +149,31 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>, paper
 
 
     // shape preview setup
-    let split0 = new Shape([[-1,1], [1,1], [1,-1], [-1,-1]], paper_color, outline_color)
-    let split1 = new Shape([[-1,1], [1,1], [1,-1], [-1,-1]], paper_color, outline_color)
+    let split0 = new Shape([[-1,1], [1,1], [1,-1], [-1,-1]], paper_color, outline_color)  // side 0
+    let split1 = new Shape([[-1,1], [1,1], [1,-1], [-1,-1]], paper_color, outline_color)  // side 1
+    let connector = new Shape([[-1,1], [1,1], [1,-1], [-1,-1]], paper_color, outline_color)  // the connecting edge
     const reset_split_shapes = () => {
         scene.add(split0.group)
         scene.add(split1.group)
+        scene.add(connector.group)
         split0.group.visible = false
         split1.group.visible = false
+        connector.group.visible = false
     }
     reset_split_shapes()
-    const replace_split_shapes = (shape0: Shape, shape1: Shape) => {
+    const replace_split_shapes = (shape0: Shape, shape1: Shape, edge: Shape) => {
         split0.group.visible = false
         split1.group.visible = false
+        connector.group.visible = false
         scene.remove(split0.group)
         scene.remove(split1.group)
+        scene.remove(connector.group)
         split0 = shape0
         split1 = shape1
+        connector = edge
         scene.add(split0.group)
         scene.add(split1.group)
+        scene.add(connector.group)
     }
 
    
@@ -313,8 +301,8 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>, paper
         // convert intersections to world space
         const local_p0 = new vec2(intersections[0].x, intersections[0].y)
         const local_p1 = new vec2(intersections[1].x, intersections[1].y)
-        p0 = new vec3(local_p0.x, local_p0.y, front_side ? PAPER_THICKNESS : 0)
-        p1 = new vec3(local_p1.x, local_p1.y, front_side ? PAPER_THICKNESS : 0)
+        p0 = new vec3(local_p0.x, local_p0.y, front_side ? PAPER_THICKNESS/2 : -PAPER_THICKNESS/2)
+        p1 = new vec3(local_p1.x, local_p1.y, front_side ? PAPER_THICKNESS/2 : -PAPER_THICKNESS/2)
         p0.applyMatrix4(controls.touchMesh.matrixWorld)
         p1.applyMatrix4(controls.touchMesh.matrixWorld)
 
@@ -322,10 +310,11 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>, paper
         // Generate two shapes based on the intersections
         const [idx0, idx1] = intersect_idxs
         const shape1_verts = [local_p0, ...shapeVertices.slice(idx0+1, idx1+1), local_p1]
-        const shape2_verts = [local_p1, ...shapeVertices.slice(idx1+1, shapeVertices.length), ...shapeVertices.slice(0, idx0+1), local_p0]        
+        const shape2_verts = [local_p1, ...shapeVertices.slice(idx1+1, shapeVertices.length), ...shapeVertices.slice(0, idx0+1), local_p0]
         const shape1 = new Shape(shape1_verts.map(v => [v.x, v.y]), paper_color, outline_color)
         const shape2 = new Shape(shape2_verts.map(v => [v.x, v.y]), paper_color, outline_color)
-        replace_split_shapes(shape1, shape2)
+        const edge_shape = make_edge_shape(local_p0, local_p1, front_side ? 1 : -1, paper_color, outline_color);
+        replace_split_shapes(shape1, shape2, edge_shape)
         shape1.group.applyMatrix4(controls.touchMesh.matrixWorld)
         shape2.group.applyMatrix4(controls.touchMesh.matrixWorld)
         shape1.group.visible = true
@@ -458,7 +447,36 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>, paper
 }
 
 
+const make_edge_shape = (p0: vec2, p1: vec2, zshiftsign: -1|1, paper_color: number, outline_color: number): Shape => {
+    //construct the perpendicular direction to p0->p1
+    const direction = new vec2().subVectors(p1, p0).normalize()
+    const perpdir = new vec2(-direction.y, direction.x)
+    const v0 = p0.clone().addScaledVector(perpdir, PAPER_THICKNESS/2)
+    const v1 = p0.clone().addScaledVector(perpdir, -PAPER_THICKNESS/2)
+    const v2 = p1.clone().addScaledVector(perpdir, -PAPER_THICKNESS/2)
+    const v3 = p1.clone().addScaledVector(perpdir, PAPER_THICKNESS/2)
+    const shape = new Shape([[v0.x, v0.y], [v1.x, v1.y], [v2.x, v2.y], [v3.x, v3.y]], paper_color, outline_color)
 
+    //rotate the shape along p0->p1 by 90 degrees
+    const axis = new THREE.Vector3(direction.x, direction.y, 0)
+    const angle = Math.PI/2
+    const quaternion = new THREE.Quaternion().setFromAxisAngle(axis, angle);
+    const rotationMatrix = new THREE.Matrix4().makeRotationFromQuaternion(quaternion);
+        const translationToOrigin = new THREE.Matrix4().makeTranslation(-p0.x, -p0.y, 0);
+    const translationBack = new THREE.Matrix4().makeTranslation(p0.x, p0.y, 0);
+    
+    const transformationMatrix = new THREE.Matrix4()
+        .premultiply(translationToOrigin)
+        .premultiply(rotationMatrix)
+        .premultiply(translationBack);
+    
+    shape.group.applyMatrix4(transformationMatrix)
+    shape.group.position.z += PAPER_THICKNESS/2*zshiftsign
+
+
+
+    return shape
+}
 
 const getLineIntersection = (segment: {A: vec2, B: vec2}, line: {C: vec2, D: vec2}) => {
     const {A, B} = segment
