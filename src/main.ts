@@ -6,6 +6,7 @@ import {rotating_cube_scene} from './scenes/rotating_cube';
 import { test_touch_controls_scene } from './scenes/touch_controls_testing';
 import { clipping_plane_demo } from './scenes/clipping_plane_demo';
 import { business_card } from './scenes/business_card';
+import { build_thing_scene } from './scenes/build_thing';
 
 // Find the div with id 'GameView'
 const gameView = document.getElementById('GameView') as HTMLDivElement;
@@ -61,6 +62,7 @@ const scene_selector_main = () => {
     // if user presses 1 on keyboard, then run rotating_cube_scene, if 2, then run paper_folding_scene, etc.
     const scenes: SceneFactory[] = [
         rotating_cube_scene,
+        build_thing_scene,   
         general_folding_scene([[-8.5/2, 11/2], [8.5/2, 11/2], [8.5/2, -11/2], [-8.5/2, -11/2]]),
         general_folding_scene([[0, 10], [9.511, 3.09], [5.878, -8.09], [-5.878, -8.09], [-9.511, 3.09]]),
         general_folding_scene([[10, 0], [5, 8.66], [-5, 8.66], [-10, 0], [-5, -8.66], [5, -8.66]]),
@@ -68,7 +70,7 @@ const scene_selector_main = () => {
         general_folding_scene([[0, 10], [10, 5], [5, -10], [0,-10], [-10, 0], [-5, 10]]),
         test_touch_controls_scene,
         clipping_plane_demo,
-        business_card,    
+        business_card, 
     ]
     console.assert(scenes.length <= 10, "Too many scenes included. Extra scenes will not be accessible via keyboard shortcuts.");
     const scene_button_map: Map<string, SceneFactory> = new Map<string, SceneFactory>();

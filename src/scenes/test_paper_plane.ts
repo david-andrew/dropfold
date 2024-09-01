@@ -2,22 +2,34 @@
 import * as THREE from 'three';
 // import { Vector2 as vec2 } from 'three';
 
-const vec2 = (a:number, b:number) => new THREE.Vector2(a, b);
 
-type Facet = {
-    vertices: THREE.Vector2[],
+type FacetTemplate = {
+    vertices: [number, number][],//THREE.Vector2[],
     links: ([number, number] | null)[]  // [layer-offset, linked-facet-index]. edge index of target facet can be determined by looking at the facet's connections and finding the one that matches up to the source facet
 }
 
-type Layer = Facet[];
-type Thing = Layer[];
+type LayerTemplate = FacetTemplate[];
+type ThingTemplate = LayerTemplate[];
 
-const states: Thing[] = [
+
+type Fold = {
+    layer: number,
+    facet: number,
+    from: THREE.Vector2,
+    to: THREE.Vector2
+}
+
+type Replay = {
+    folds: Fold[],
+    states: ThingTemplate[]
+}
+
+export const states: ThingTemplate[] = [
     // state 0
     [
         [
             {
-                vertices: [vec2(-4.25, 5.5), vec2(4.25, 5.5), vec2(4.25, -5.5), vec2(-4.25, -5.5)],
+                vertices: [[-4.25, 5.5], [4.25, 5.5], [4.25, -5.5], [-4.25, -5.5]],
                 links: [null, null, null, null]
             }
         ]
@@ -27,13 +39,13 @@ const states: Thing[] = [
     [
         [
             {
-                vertices: [vec2(-4.25, 1.25), vec2(0, 5.5), vec2(4.25, 5.5), vec2(4.25, -5.5), vec2(-4.25, -5.5)],
+                vertices: [[-4.25, 1.25], [0, 5.5], [4.25, 5.5], [4.25, -5.5], [-4.25, -5.5]],
                 links: [[1, 0], null, null, null, null]
             }
         ],
         [
             {
-                vertices: [vec2(-4.25, 1.25), vec2(0, 5.5), vec2(0, 1.25)],
+                vertices: [[-4.25, 1.25], [0, 5.5], [0, 1.25]],
                 links: [[-1, 0], null, null]
             }
         ]
@@ -43,17 +55,17 @@ const states: Thing[] = [
     [
         [
             {
-                vertices: [vec2(-4.25, 1.25), vec2(0, 5.5), vec2(4.25, 1.25), vec2(4.25, -5.5), vec2(-4.25, -5.5)],
+                vertices: [[-4.25, 1.25], [0, 5.5], [4.25, 1.25], [4.25, -5.5], [-4.25, -5.5]],
                 links: [[1, 0], [1, 1], null, null, null]
             }
         ],
         [
             {
-                vertices: [vec2(-4.25, 1.25), vec2(0, 5.5), vec2(0, 1.25)],
+                vertices: [[-4.25, 1.25], [0, 5.5], [0, 1.25]],
                 links: [[-1, 0], null, null]
             },
             {
-                vertices: [vec2(0, 5.5), vec2(0, 1.25), vec2(4.25, 1.25)],
+                vertices: [[0, 5.5], [0, 1.25], [4.25, 1.25]],
                 links: [null, null, [-1, 0]]
             }
         ]
@@ -64,23 +76,23 @@ const states: Thing[] = [
     [
         [
             {
-                vertices: [vec2(-4.25, 1.25), vec2(4.25, 1.25), vec2(4.25, -5.5), vec2(-4.25, -5.5)],
+                vertices: [[-4.25, 1.25], [4.25, 1.25], [4.25, -5.5], [-4.25, -5.5]],
                 links: [[2, 0], null, null, null]
             }
         ],
         [
             {
-                vertices: [vec2(-4.25, 1.25), vec2(0, 1.25), vec2(0, -4.25)],
+                vertices: [[-4.25, 1.25], [0, 1.25], [0, -3]],
                 links: [null, null, [1, 0]]
             },
             {
-                vertices: [vec2(0, -4.25), vec2(0, 1.25), vec2(4.25, 1.25)],
+                vertices: [[0, -3], [0, 1.25], [4.25, 1.25]],
                 links: [null, null, [1, 0]]
             }
         ],
         [
             {
-                vertices: [vec2(-4.25, 1.25), vec2(4.25, 1.25), vec2(0, -4.25)],
+                vertices: [[-4.25, 1.25], [4.25, 1.25], [0, -3]],
                 links: [null, null, null]
             }
         ]
