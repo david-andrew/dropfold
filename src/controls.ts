@@ -45,6 +45,7 @@ export class OrbitalPointer {
     multitouchDelayMs: number;
     isInteracting = false;
     interactionSphere: THREE.Mesh;
+    interactingPlane: THREE.Mesh;
     touchPoint: THREE.Vector3 | null = null;
     touchMesh: THREE.Mesh | null = null;
     getInteractables: () => THREE.Mesh[];
@@ -80,6 +81,13 @@ export class OrbitalPointer {
         this.interactionSphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
         scene.add(this.interactionSphere);
         this.interactionSphere.visible = false;
+
+        // Create a plane to represent the interaction plane
+        const planeGeometry = new THREE.PlaneGeometry(1000, 1000);
+        const planeMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+        this.interactingPlane = new THREE.Mesh( planeGeometry, planeMaterial );
+        scene.add(this.interactingPlane);
+        this.interactingPlane.visible = false;
 
         // Add event listeners for both touch and mouse interaction
         window.addEventListener('mousedown', this.onPointerDown, false);
@@ -155,6 +163,18 @@ export class OrbitalPointer {
         this.interactionSphere.visible = true && this.showPointer;
         this.interactionSphere.position.copy(this.intersects[0].point);
 
+        // Make the interacting plane visible and position it at the interaction location and normal to the face
+        this.interactingPlane.visible = true && this.showPointer;
+        const normal = this.intersects[0].face.normal.clone().normalize();
+        normal.transformDirection(this.touchMesh.matrixWorld);
+        const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
+        const position = this.intersects[0].point;
+        this.interactingPlane.position.copy(position);
+        // shift the plane slightly back to avoid z-fighting
+        this.interactingPlane.position.add(normal.multiplyScalar(0.01 * Math.sign(normal.dot(this.raycaster.ray.direction))));
+        this.interactingPlane.quaternion.copy(quaternion);
+
+
         // Call the user-defined callback function if it exists
         this.onPress?.();
     };
@@ -169,7 +189,7 @@ export class OrbitalPointer {
         this.raycaster.setFromCamera(this.pointer, this.cameraRef);
 
         // Calculate objects intersecting the picking ray
-        this.intersects = this.raycaster.intersectObjects(this.meshHopping ? this.getInteractables() : [this.touchMesh]);
+        this.intersects = this.raycaster.intersectObjects(this.meshHopping ? [...this.getInteractables(), this.interactingPlane] : [this.touchMesh]);
 
         if (this.intersects.length > 0) {
             // Update the touch point and mesh if the pointer moves over another mesh
@@ -196,6 +216,7 @@ export class OrbitalPointer {
 
         // Hide the sphere when the interaction ends
         this.interactionSphere.visible = false;
+        this.interactingPlane.visible = false;
 
         // Call the user-defined callback function if it exists
         this.onRelease?.();
