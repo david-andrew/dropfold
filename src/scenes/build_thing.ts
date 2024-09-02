@@ -14,8 +14,9 @@ type FacetProps = {
 };
 
 const LAYER_THICKNESS = 0.01;
-const EDGE_COLOR: THREE.ColorRepresentation = 0xffffff;
-const FACE_COLOR: THREE.ColorRepresentation = 0x000000;
+const BACKGROUND_COLOR: THREE.ColorRepresentation = 0x222222;
+const EDGE_COLOR: THREE.ColorRepresentation = 0x000000;
+const FACE_COLOR: THREE.ColorRepresentation = 0xffffff;
 
 class Facet {
     mesh: THREE.Mesh;
@@ -83,6 +84,7 @@ class Edge {
 
 export const build_thing_scene = (renderer: THREE.WebGLRenderer): SceneFunctions => {
     const scene = new THREE.Scene();
+    scene.background = new THREE.Color(BACKGROUND_COLOR);
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.z = 10;
 
@@ -92,6 +94,7 @@ export const build_thing_scene = (renderer: THREE.WebGLRenderer): SceneFunctions
     // quick and dirty debug
     const group = new THREE.Group();
     const facets: Facet[] = [];
+    const edges: Edge[] = [];
     thing_t.forEach((layer, i) =>
         layer.forEach((facet_t) => {
             const f = new Facet({
@@ -118,6 +121,7 @@ export const build_thing_scene = (renderer: THREE.WebGLRenderer): SceneFunctions
                     color: FACE_COLOR,
                     edge_color: EDGE_COLOR
                 });
+                edges.push(edge);
                 group.add(edge.mesh);
                 group.add(edge.lines);
             });
