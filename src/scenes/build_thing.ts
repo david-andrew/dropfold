@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { SceneFunctions } from '../main';
 import { states as paper_plane_states } from './test_paper_plane';
 import { OrbitControls } from 'three/examples/jsm/Addons.js';
+import { OrbitalPointer } from '../controls';
 
 // simple scene that takes the frames from test_paper_plane and makes the corresponding mesh out of them
 
@@ -90,7 +91,7 @@ export const build_thing_scene = (renderer: THREE.WebGLRenderer): SceneFunctions
 
     // quick and dirty debug
     const group = new THREE.Group();
-    // const facets: Facet[] = [];
+    const facets: Facet[] = [];
     thing_t.forEach((layer, i) =>
         layer.forEach((facet_t) => {
             const f = new Facet({
@@ -99,7 +100,7 @@ export const build_thing_scene = (renderer: THREE.WebGLRenderer): SceneFunctions
                 color: FACE_COLOR,
                 edge_color: EDGE_COLOR
             });
-            // facets.push(f);
+            facets.push(f);
             group.add(f.mesh);
             group.add(f.lines);
 
@@ -119,14 +120,20 @@ export const build_thing_scene = (renderer: THREE.WebGLRenderer): SceneFunctions
                 });
                 group.add(edge.mesh);
                 group.add(edge.lines);
-                console.log('added edge', edge);
             });
         })
     );
     scene.add(group);
 
     // controls
-    const controls = new OrbitControls(camera, renderer.domElement);
+    // const controls = new OrbitControls(camera, renderer.domElement);
+    const controls = new OrbitalPointer({
+        camera,
+        scene,
+        domElement: renderer.domElement,
+        getInteractables: () => facets.map((f) => f.mesh),
+        meshHopping: true
+    });
 
     const update_scene = () => {
         // controls.update();
