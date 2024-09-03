@@ -117,6 +117,7 @@ class BuildThingScene {
     to_point = new THREE.Vector3(); // The current pointer location (start point should move to this point to accomplish the fold)
     p0 = new THREE.Vector3(); // The start point of the fold line
     p1 = new THREE.Vector3(); // The end point of the fold line
+    // fold_normal = new THREE.Vector3(); // The normal of the fold plane
 
     // included methods
     hide_debug_geometry: () => void;
@@ -176,7 +177,8 @@ class BuildThingScene {
             onPress: this.on_press,
             onMove: this.on_move,
             onRelease: this.on_release,
-            meshHopping: true
+            faceBounded: false,
+            showPlane: false
         });
     }
 
@@ -229,8 +231,8 @@ class BuildThingScene {
         this.scene.add(this.group);
         this.group_copy = this.group.clone();
         this.scene.add(this.group_copy);
-        // this.group_copy.visible = false;
-        this.group_copy.position.z = -5; // just for debug
+        this.group_copy.visible = false;
+        // this.group_copy.position.z = -5; // just for debug
     };
 
     // only call on initial press
@@ -269,20 +271,45 @@ class BuildThingScene {
         this.mid_point.copy(this.from_point).lerp(this.to_point, 0.5);
     };
 
+    // transform the group_copy across the fold
+    tranform_group_copy = () => {
+        // get the unit vector from the from_point to the to_point and compute the axis to fold over
+        const fold_dir = this.to_point.clone().sub(this.from_point).normalize();
+        const fold_axis = new THREE.Vector3().crossVectors(fold_dir, this.controls.touchNormal).normalize();
+
+        // ensure the copy starts at the same position as the original
+        this.group_copy.position.copy(this.group.position);
+        this.group_copy.rotation.copy(this.group.rotation);
+
+        // create a transform to rotate the group_copy around the fold axis by 180 degrees
+        const transform = new THREE.Matrix4();
+        transform.makeRotationAxis(fold_axis, Math.PI);
+        this.group_copy.position.sub(this.mid_point);
+        this.group_copy.applyMatrix4(transform);
+        this.group_copy.position.add(this.mid_point);
+    };
+
     on_press = () => {
         this.fold_facet_idx = this.mesh_to_facet_idx.get(this.controls.touchMesh);
         this.update_closest_edge(this.fold_facet_idx);
         this.to_point.copy(this.controls.touchPoint);
         this.update_midpoint();
+        // this.fold_normal.copy(this.controls.touchNormal);
+
+        // show the group_copy
+        this.group_copy.visible = true;
+        this.tranform_group_copy();
     };
 
     on_move = () => {
         this.to_point.copy(this.controls.touchPoint);
         this.update_midpoint();
+        this.tranform_group_copy();
     };
 
     on_release = () => {
         this.fold_facet_idx = -1;
+        this.group_copy.visible = false;
     };
 
     update_scene = () => {
