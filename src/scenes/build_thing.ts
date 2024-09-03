@@ -6,6 +6,10 @@ import { states as paper_plane_states, ThingTemplate } from './test_paper_plane'
 import { OrbitalPointer } from '../controls';
 import { setup_debug_geometry } from '../utils';
 
+import { Line2 } from 'three/examples/jsm/lines/Line2.js';
+import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
+
 // simple scene that takes the frames from test_paper_plane and makes the corresponding mesh out of them
 
 type FacetProps = {
@@ -18,7 +22,7 @@ type FacetProps = {
 class Facet {
     vertices: THREE.Vector2[];
     mesh: THREE.Mesh;
-    lines: THREE.LineSegments;
+    lines: Line2; // THREE.LineSegments;
 
     constructor({ vertices, z_offset = 0.0, color, edge_color }: FacetProps) {
         // make the mesh
@@ -29,11 +33,18 @@ class Facet {
         this.mesh = new THREE.Mesh(geometry, material);
         this.mesh.position.z = z_offset;
 
-        // make the lines
-        const lines = new THREE.EdgesGeometry(geometry);
-        const linesMaterial = new THREE.LineBasicMaterial({ color: edge_color });
-        this.lines = new THREE.LineSegments(lines, linesMaterial);
-        this.lines.position.z = z_offset;
+        // // make the lines
+        // const lines = new THREE.EdgesGeometry(geometry);
+        // const linesMaterial = new THREE.LineBasicMaterial({ color: edge_color });
+        // this.lines = new THREE.LineSegments(lines, linesMaterial);
+        // this.lines.position.z = z_offset;
+
+        // make the lines with Line2
+        const lineGeometry = new LineGeometry();
+        lineGeometry.setPositions([...this.vertices, this.vertices[0]].map((v) => [v.x, v.y, z_offset]).flat());
+        const lineMaterial = new LineMaterial({ color: edge_color, linewidth: 2 });
+        lineMaterial.resolution.set(window.innerWidth, window.innerHeight);
+        this.lines = new Line2(lineGeometry, lineMaterial);
     }
 
     add_to_scene(scene: THREE.Scene) {
@@ -52,7 +63,7 @@ type EdgeProps = {
 };
 class Edge {
     mesh: THREE.Mesh;
-    lines: THREE.LineSegments;
+    lines: Line2; //THREE.LineSegments;
 
     constructor({ p0, p1, thickness, z_offset, color, edge_color }: EdgeProps) {
         // directly build the geometry in 3D with a BufferGeometry
@@ -69,10 +80,17 @@ class Edge {
         const material = new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide });
         this.mesh = new THREE.Mesh(geometry, material);
 
-        // make the lines
-        const lines = new THREE.EdgesGeometry(geometry);
-        const linesMaterial = new THREE.LineBasicMaterial({ color: edge_color });
-        this.lines = new THREE.LineSegments(lines, linesMaterial);
+        // // make the lines
+        // const lines = new THREE.EdgesGeometry(geometry);
+        // const linesMaterial = new THREE.LineBasicMaterial({ color: edge_color });
+        // this.lines = new THREE.LineSegments(lines, linesMaterial);
+
+        // make the lines with Line2
+        const lineGeometry = new LineGeometry();
+        lineGeometry.setPositions(vertices);
+        const lineMaterial = new LineMaterial({ color: edge_color, linewidth: 2 });
+        lineMaterial.resolution.set(window.innerWidth, window.innerHeight);
+        this.lines = new Line2(lineGeometry, lineMaterial);
     }
 
     add_to_scene(scene: THREE.Scene) {
