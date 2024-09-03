@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { clamp } from 'three/src/math/MathUtils.js';
+
 import { SceneFunctions } from '../main';
 import { states as paper_plane_states, ThingTemplate } from './test_paper_plane';
 import { OrbitalPointer } from '../controls';
@@ -14,12 +16,14 @@ type FacetProps = {
 };
 
 class Facet {
+    vertices: THREE.Vector2[];
     mesh: THREE.Mesh;
     lines: THREE.LineSegments;
 
     constructor({ vertices, z_offset = 0.0, color, edge_color }: FacetProps) {
         // make the mesh
-        const shape = new THREE.Shape(vertices.map(([x, y]) => new THREE.Vector2(x, y)));
+        this.vertices = vertices.map(([x, y]) => new THREE.Vector2(x, y));
+        const shape = new THREE.Shape(this.vertices);
         const geometry = new THREE.ShapeGeometry(shape);
         const material = new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide });
         this.mesh = new THREE.Mesh(geometry, material);
@@ -103,6 +107,15 @@ class BuildThingScene {
     facets: Facet[];
     edges: Edge[];
     mesh_to_facet_idx: Map<THREE.Mesh, number>;
+    group: THREE.Group;
+    group_copy: THREE.Group;
+
+    // fold tracking parameters
+    from_point = new THREE.Vector3();
+    mid_point = new THREE.Vector3();
+    to_point = new THREE.Vector3();
+    p0 = new THREE.Vector3();
+    p1 = new THREE.Vector3();
 
     // included methods
     hide_debug_geometry: () => void;
@@ -151,23 +164,31 @@ class BuildThingScene {
 
         // DEBUG set up meshes based on paper_plane_states (todo move this process into a method)
         // example of a plane layer
-        this.rebuild_thing(paper_plane_states[3]);
+        // set dummy values for group and group_copy
+        this.rebuild_thing(paper_plane_states[2]);
 
         this.controls = new OrbitalPointer({
             camera: this.camera,
             scene: this.scene,
             domElement: this.renderer.domElement,
             getInteractables: () => this.facets.map((f) => f.mesh),
-            // onPress: update_closest_edge,
+            onPress: this.update_closest_edge,
             meshHopping: true
         });
     }
 
     rebuild_thing = (thing_t: ThingTemplate) => {
         // quick and dirty debug
-        const group = new THREE.Group();
+        if (this.group && this.group_copy) {
+            this.scene.remove(this.group);
+            this.group = new THREE.Group();
+            this.scene.remove(this.group_copy);
+            this.group_copy = new THREE.Group();
+        }
+        this.group = new THREE.Group();
         this.facets = [];
         this.edges = [];
+        this.mesh_to_facet_idx = new Map<THREE.Mesh, number>();
         thing_t.forEach((layer, i) =>
             layer.forEach((facet_t) => {
                 const f = new Facet({
@@ -176,9 +197,10 @@ class BuildThingScene {
                     color: this.face_color,
                     edge_color: this.edge_color
                 });
+                this.mesh_to_facet_idx.set(f.mesh, this.facets.length);
                 this.facets.push(f);
-                group.add(f.mesh);
-                group.add(f.lines);
+                this.group.add(f.mesh);
+                this.group.add(f.lines);
 
                 // handle any edge links
                 facet_t.links.forEach((link, j) => {
@@ -195,15 +217,60 @@ class BuildThingScene {
                         edge_color: this.edge_color
                     });
                     this.edges.push(edge);
-                    group.add(edge.mesh);
-                    group.add(edge.lines);
+                    this.group.add(edge.mesh);
+                    this.group.add(edge.lines);
                 });
             })
         );
-        this.scene.add(group);
+        // add the group and a copy to the scene
+        this.scene.add(this.group);
+        this.group_copy = this.group.clone();
+        this.scene.add(this.group_copy);
+        // this.group_copy.visible = false;
+        this.group_copy.position.z = -5; // just for debug
+    };
+
+    // only call on initial press
+    update_closest_edge = () => {
+        const facet_idx = this.mesh_to_facet_idx.get(this.controls.touchMesh);
+        const facet = this.facets[facet_idx];
+
+        // Transform the 2D shape points to 3D
+        const worldVertices: THREE.Vector3[] = [];
+        facet.vertices.forEach((vertex) => {
+            const vector3D = new THREE.Vector3(vertex.x, vertex.y, 0); // Convert 2D point to 3D by adding a z-value of 0
+            vector3D.applyMatrix4(facet.mesh.matrixWorld); // Apply the mesh's world transformation matrix to get the 3D position
+            worldVertices.push(vector3D);
+        });
+
+        // Find the closest point on the shape to the touch point
+        let bestPoint = worldVertices[0];
+        const worldIntersect = this.controls.touchPoint; //intersect_point.clone().applyMatrix4(shape.prism.matrixWorld)
+        let bestDistance = bestPoint.distanceTo(worldIntersect);
+        for (let i = 1; i < worldVertices.length + 1; i++) {
+            const V = worldVertices[i % worldVertices.length].clone().sub(worldVertices[i - 1]);
+            const W = worldIntersect.clone().sub(worldVertices[i - 1]);
+            const t = clamp(W.dot(V) / V.dot(V), 0, 1);
+            const closest = V.clone()
+                .multiplyScalar(t)
+                .add(worldVertices[i - 1]);
+            const distance = closest.distanceTo(worldIntersect);
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                bestPoint = closest;
+            }
+        }
+        this.from_point.copy(bestPoint);
     };
 
     update_scene = () => {
+        // debug update debug geometry
+        if (this.controls.isInteracting) {
+            this.show_debug_geometry(this.from_point, this.mid_point, this.to_point, this.p0, this.p1);
+        } else {
+            this.hide_debug_geometry();
+        }
+
         // Render the scene from the perspective of the camera
         this.renderer.render(this.scene, this.camera);
     };
