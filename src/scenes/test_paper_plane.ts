@@ -9,7 +9,7 @@ type FacetTemplate = {
 }
 
 type LayerTemplate = FacetTemplate[];
-type ThingTemplate = LayerTemplate[];
+export type ThingTemplate = LayerTemplate[];
 
 
 type Fold = {

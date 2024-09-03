@@ -1,22 +1,17 @@
 import * as THREE from 'three';
 import { SceneFunctions } from '../main';
-import { states as paper_plane_states } from './test_paper_plane';
-import { OrbitControls } from 'three/examples/jsm/Addons.js';
+import { states as paper_plane_states, ThingTemplate } from './test_paper_plane';
 import { OrbitalPointer } from '../controls';
+import { setup_debug_geometry } from '../utils';
 
 // simple scene that takes the frames from test_paper_plane and makes the corresponding mesh out of them
 
 type FacetProps = {
     vertices: Array<[number, number]>;
     z_offset?: number;
-    color: number;
-    edge_color: number;
+    color: THREE.ColorRepresentation;
+    edge_color: THREE.ColorRepresentation;
 };
-
-const LAYER_THICKNESS = 0.01;
-const BACKGROUND_COLOR: THREE.ColorRepresentation = 0x222222;
-const EDGE_COLOR: THREE.ColorRepresentation = 0x000000;
-const FACE_COLOR: THREE.ColorRepresentation = 0xffffff;
 
 class Facet {
     mesh: THREE.Mesh;
@@ -48,8 +43,8 @@ type EdgeProps = {
     p1: [number, number];
     thickness: number;
     z_offset: number;
-    color: number;
-    edge_color: number;
+    color: THREE.ColorRepresentation;
+    edge_color: THREE.ColorRepresentation;
 };
 class Edge {
     mesh: THREE.Mesh;
@@ -82,69 +77,147 @@ class Edge {
     }
 }
 
-export const build_thing_scene = (renderer: THREE.WebGLRenderer): SceneFunctions => {
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(BACKGROUND_COLOR);
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.z = 10;
+type BuildThingSceneProps = {
+    renderer: THREE.WebGLRenderer;
+    layer_thickness?: number;
+    background_color?: THREE.ColorRepresentation;
+    edge_color?: THREE.ColorRepresentation;
+    face_color?: THREE.ColorRepresentation;
+    debug_geometry?: boolean;
+};
+class BuildThingScene {
+    // initialization
+    layer_thickness: number;
+    background_color: THREE.ColorRepresentation;
+    edge_color: THREE.ColorRepresentation;
+    face_color: THREE.ColorRepresentation;
+    debug_geometry: boolean;
 
-    // example of a plane layer
-    const thing_t = paper_plane_states[3];
+    // rendering/simulation
+    scene: THREE.Scene;
+    camera: THREE.PerspectiveCamera;
+    renderer: THREE.WebGLRenderer;
+    controls: OrbitalPointer;
 
-    // quick and dirty debug
-    const group = new THREE.Group();
-    const facets: Facet[] = [];
-    const edges: Edge[] = [];
-    thing_t.forEach((layer, i) =>
-        layer.forEach((facet_t) => {
-            const f = new Facet({
-                vertices: facet_t.vertices,
-                z_offset: i * LAYER_THICKNESS,
-                color: FACE_COLOR,
-                edge_color: EDGE_COLOR
-            });
-            facets.push(f);
-            group.add(f.mesh);
-            group.add(f.lines);
+    // objects
+    facets: Facet[];
+    edges: Edge[];
+    mesh_to_facet_idx: Map<THREE.Mesh, number>;
 
-            // handle any edge links
-            facet_t.links.forEach((link, j) => {
-                if (link === null) return;
-                const [layer_offset, facet_index] = link;
-                if (layer_offset < 0) return; // only handle positive direction links since there are 2 copies (one for positive, and one for negative)
+    // included methods
+    hide_debug_geometry: () => void;
+    show_debug_geometry: (
+        from_point: THREE.Vector3,
+        mid_point: THREE.Vector3,
+        to_point: THREE.Vector3,
+        p0: THREE.Vector3,
+        p1: THREE.Vector3
+    ) => void;
 
-                const edge = new Edge({
-                    p0: facet_t.vertices[j],
-                    p1: facet_t.vertices[(j + 1) % facet_t.vertices.length],
-                    thickness: layer_offset * LAYER_THICKNESS,
-                    z_offset: i * LAYER_THICKNESS,
-                    color: FACE_COLOR,
-                    edge_color: EDGE_COLOR
+    constructor({
+        renderer,
+        layer_thickness = 0.01,
+        background_color = 0x222222,
+        edge_color = 0x000000,
+        face_color = 0xffffff,
+        debug_geometry = true
+    }: BuildThingSceneProps) {
+        // set initialization parameters
+        this.layer_thickness = layer_thickness;
+        this.background_color = background_color;
+        this.edge_color = edge_color;
+        this.face_color = face_color;
+        this.debug_geometry = debug_geometry;
+
+        // setup the scene
+        this.renderer = renderer;
+        this.scene = new THREE.Scene();
+        this.scene.background = new THREE.Color(this.background_color);
+        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        this.camera.position.z = 10;
+
+        // setup debug geometry
+        const { hide_debug_geometry, show_debug_geometry } = setup_debug_geometry(this.scene, this.debug_geometry);
+        this.hide_debug_geometry = hide_debug_geometry;
+        this.show_debug_geometry = show_debug_geometry;
+        // debug test
+        this.show_debug_geometry(
+            new THREE.Vector3(0, 0, 0),
+            new THREE.Vector3(1, 1, 0),
+            new THREE.Vector3(2, 2, 0),
+            new THREE.Vector3(2, 0, 0),
+            new THREE.Vector3(0, 2, 0)
+        );
+
+        // DEBUG set up meshes based on paper_plane_states (todo move this process into a method)
+        // example of a plane layer
+        this.rebuild_thing(paper_plane_states[3]);
+
+        this.controls = new OrbitalPointer({
+            camera: this.camera,
+            scene: this.scene,
+            domElement: this.renderer.domElement,
+            getInteractables: () => this.facets.map((f) => f.mesh),
+            // onPress: update_closest_edge,
+            meshHopping: true
+        });
+    }
+
+    rebuild_thing = (thing_t: ThingTemplate) => {
+        // quick and dirty debug
+        const group = new THREE.Group();
+        this.facets = [];
+        this.edges = [];
+        thing_t.forEach((layer, i) =>
+            layer.forEach((facet_t) => {
+                const f = new Facet({
+                    vertices: facet_t.vertices,
+                    z_offset: i * this.layer_thickness,
+                    color: this.face_color,
+                    edge_color: this.edge_color
                 });
-                edges.push(edge);
-                group.add(edge.mesh);
-                group.add(edge.lines);
-            });
-        })
-    );
-    scene.add(group);
+                this.facets.push(f);
+                group.add(f.mesh);
+                group.add(f.lines);
 
-    // controls
-    // const controls = new OrbitControls(camera, renderer.domElement);
-    const controls = new OrbitalPointer({
-        camera,
-        scene,
-        domElement: renderer.domElement,
-        getInteractables: () => facets.map((f) => f.mesh),
-        meshHopping: true
-    });
+                // handle any edge links
+                facet_t.links.forEach((link, j) => {
+                    if (link === null) return;
+                    const [layer_offset, facet_index] = link;
+                    if (layer_offset < 0) return; // only handle positive direction links since there are 2 copies (one for positive, and one for negative)
 
-    const update_scene = () => {
-        // controls.update();
-
-        // Render the scene from the perspective of the camera
-        renderer.render(scene, camera);
+                    const edge = new Edge({
+                        p0: facet_t.vertices[j],
+                        p1: facet_t.vertices[(j + 1) % facet_t.vertices.length],
+                        thickness: layer_offset * this.layer_thickness,
+                        z_offset: i * this.layer_thickness,
+                        color: this.face_color,
+                        edge_color: this.edge_color
+                    });
+                    this.edges.push(edge);
+                    group.add(edge.mesh);
+                    group.add(edge.lines);
+                });
+            })
+        );
+        this.scene.add(group);
     };
 
-    return { update_scene, camera, resetter: () => {} };
+    update_scene = () => {
+        // Render the scene from the perspective of the camera
+        this.renderer.render(this.scene, this.camera);
+    };
+
+    resetter = () => {
+        // todo
+    };
+}
+
+export const build_thing_scene = (renderer: THREE.WebGLRenderer): SceneFunctions => {
+    const scene = new BuildThingScene({ renderer });
+    return {
+        update_scene: scene.update_scene,
+        camera: scene.camera,
+        resetter: scene.resetter
+    };
 };
