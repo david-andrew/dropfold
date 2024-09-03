@@ -210,7 +210,7 @@ export class OrbitalPointer {
 
         // Calculate objects intersecting the picking ray
         this.intersects = this.raycaster.intersectObjects(
-            this.faceBounded ? [this.touchMesh, this.interactingPlane] : [this.touchMesh]
+            this.faceBounded ? [this.touchMesh] : [this.touchMesh, this.interactingPlane]
         );
 
         // If no objects are intersected, not an interaction (this generally won't happen, unless user goes beyond the "infinite" plane)
