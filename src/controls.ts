@@ -25,6 +25,7 @@ type OrbitalPointerProps = {
     onRelease?: () => void;
     enablePan?: boolean;
     showPointer?: boolean;
+    showPlane?: boolean;
     meshHopping?: boolean;
     multitouchDelayMs?: number;
 };
@@ -39,6 +40,7 @@ export class OrbitalPointer {
     controls: OrbitControls;
     pointer = new THREE.Vector2();
     showPointer: boolean;
+    showPlane: boolean;
     meshHopping: boolean;
     raycaster = new THREE.Raycaster();
     multitouchTimer: number | null = null;
@@ -62,6 +64,7 @@ export class OrbitalPointer {
         onRelease,
         enablePan = false,
         showPointer = true,
+        showPlane = false,
         meshHopping = false,
         multitouchDelayMs = 20
     }: OrbitalPointerProps) {
@@ -69,6 +72,7 @@ export class OrbitalPointer {
         this.controls = new OrbitControls(camera, domElement);
         this.controls.enablePan = enablePan;
         this.showPointer = showPointer;
+        this.showPlane = showPlane;
         this.meshHopping = meshHopping;
         this.multitouchDelayMs = multitouchDelayMs;
         this.getInteractables = getInteractables;
@@ -164,7 +168,7 @@ export class OrbitalPointer {
         this.interactionSphere.position.copy(this.intersects[0].point);
 
         // Make the interacting plane visible and position it at the interaction location and normal to the face
-        this.interactingPlane.visible = true && this.showPointer;
+        this.interactingPlane.visible = true && this.showPlane;
         const normal = this.intersects[0].face.normal.clone().normalize();
         normal.transformDirection(this.touchMesh.matrixWorld);
         const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
