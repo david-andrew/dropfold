@@ -51,6 +51,7 @@ export class OrbitalPointer {
     interactionSphere: THREE.Mesh;
     interactingPlane: THREE.Mesh;
     touchPoint: THREE.Vector3 | null = null;
+    touchNormal: THREE.Vector3 | null = null;
     touchMesh: THREE.Mesh | null = null;
     getInteractables: () => THREE.Mesh[];
     onPress?: () => void;
@@ -173,19 +174,25 @@ export class OrbitalPointer {
         this.touchPoint = this.intersects[0].point;
         this.touchMesh = this.intersects[0].object as THREE.Mesh;
 
+        // get the normal of the face that was clicked (in world space)
+        this.touchNormal = this.intersects[0].face.normal.clone().normalize();
+        this.touchNormal.transformDirection(this.touchMesh.matrixWorld);
+        // reverse if we touched the backside of a double-sided face
+        if (this.touchNormal.dot(this.raycaster.ray.direction) > 0) {
+            this.touchNormal.negate();
+        }
+
         // Make the interaction sphere visible and position it at the interaction location
         this.interactionSphere.visible = true && this.showPointer;
         this.interactionSphere.position.copy(this.intersects[0].point);
 
         // Make the interacting plane visible and position it at the interaction location and normal to the face
         this.interactingPlane.visible = true && this.showPlane;
-        const normal = this.intersects[0].face.normal.clone().normalize();
-        normal.transformDirection(this.touchMesh.matrixWorld);
-        const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
+        const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), this.touchNormal);
         const position = this.intersects[0].point;
         this.interactingPlane.position.copy(position);
         // shift the plane slightly back to avoid z-fighting
-        this.interactingPlane.position.add(normal.multiplyScalar(0.01 * Math.sign(normal.dot(this.raycaster.ray.direction))));
+        this.interactingPlane.position.add(this.touchNormal.multiplyScalar(-0.01));
         this.interactingPlane.quaternion.copy(quaternion);
 
         // Call the user-defined callback function if it exists
@@ -227,6 +234,7 @@ export class OrbitalPointer {
         this.controls.enabled = true;
         this.isInteracting = false;
         this.touchPoint = null;
+        this.touchNormal = null;
         this.touchMesh = null;
 
         // Hide the sphere when the interaction ends
