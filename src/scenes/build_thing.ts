@@ -111,11 +111,12 @@ class BuildThingScene {
     group_copy: THREE.Group;
 
     // fold tracking parameters
-    from_point = new THREE.Vector3();
-    mid_point = new THREE.Vector3();
-    to_point = new THREE.Vector3();
-    p0 = new THREE.Vector3();
-    p1 = new THREE.Vector3();
+    fold_facet_idx: number = -1; // The index of the initially touched facet at the start of a fold
+    from_point = new THREE.Vector3(); // The point on the facet that the fold starts from
+    mid_point = new THREE.Vector3(); // The halfway point between the fold start and current pointer location
+    to_point = new THREE.Vector3(); // The current pointer location (start point should move to this point to accomplish the fold)
+    p0 = new THREE.Vector3(); // The start point of the fold line
+    p1 = new THREE.Vector3(); // The end point of the fold line
 
     // included methods
     hide_debug_geometry: () => void;
@@ -172,7 +173,9 @@ class BuildThingScene {
             scene: this.scene,
             domElement: this.renderer.domElement,
             getInteractables: () => this.facets.map((f) => f.mesh),
-            onPress: this.update_closest_edge,
+            onPress: this.on_press,
+            onMove: this.on_move,
+            onRelease: this.on_release,
             meshHopping: true
         });
     }
@@ -231,8 +234,7 @@ class BuildThingScene {
     };
 
     // only call on initial press
-    update_closest_edge = () => {
-        const facet_idx = this.mesh_to_facet_idx.get(this.controls.touchMesh);
+    update_closest_edge = (facet_idx: number) => {
         const facet = this.facets[facet_idx];
 
         // Transform the 2D shape points to 3D
@@ -261,6 +263,26 @@ class BuildThingScene {
             }
         }
         this.from_point.copy(bestPoint);
+    };
+
+    update_midpoint = () => {
+        this.mid_point.copy(this.from_point).lerp(this.to_point, 0.5);
+    };
+
+    on_press = () => {
+        this.fold_facet_idx = this.mesh_to_facet_idx.get(this.controls.touchMesh);
+        this.update_closest_edge(this.fold_facet_idx);
+        this.to_point.copy(this.controls.touchPoint);
+        this.update_midpoint();
+    };
+
+    on_move = () => {
+        this.to_point.copy(this.controls.touchPoint);
+        this.update_midpoint();
+    };
+
+    on_release = () => {
+        this.fold_facet_idx = -1;
     };
 
     update_scene = () => {

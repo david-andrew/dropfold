@@ -10,6 +10,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
  * @param domElement - The DOM element to be used for event listeners
  * @param getInteractables - A function that returns an array of meshes to be raycasted against
  * @param onPress - (optional) A user callback function to be called when the pointer is pressed
+ * @param onMove - (optional) A user callback function to be called when the pointer is moved (while pressed)
  * @param onRelease - (optional) A user callback function to be called when the pointer is released
  * @param enablePan - (optional) A boolean to enable panning in orbit controls. Default is false
  * @param showPointer - (optional) A boolean to show a small sphere at the intersection point. Default is true
@@ -22,6 +23,7 @@ type OrbitalPointerProps = {
     domElement: HTMLElement;
     getInteractables: () => THREE.Mesh[]; //TBD if this should be more general e.g. THREE.Object3D[]
     onPress?: () => void;
+    onMove?: () => void;
     onRelease?: () => void;
     enablePan?: boolean;
     showPointer?: boolean;
@@ -52,6 +54,7 @@ export class OrbitalPointer {
     touchMesh: THREE.Mesh | null = null;
     getInteractables: () => THREE.Mesh[];
     onPress?: () => void;
+    onMove?: () => void;
     onRelease?: () => void;
     intersects: THREE.Intersection[] = []; // current intersections returned by raycaster
 
@@ -61,6 +64,7 @@ export class OrbitalPointer {
         domElement,
         getInteractables,
         onPress,
+        onMove,
         onRelease,
         enablePan = false,
         showPointer = true,
@@ -77,6 +81,7 @@ export class OrbitalPointer {
         this.multitouchDelayMs = multitouchDelayMs;
         this.getInteractables = getInteractables;
         this.onPress = onPress;
+        this.onMove = onMove;
         this.onRelease = onRelease;
 
         // Create a small sphere to represent the click/touch location
@@ -88,8 +93,13 @@ export class OrbitalPointer {
 
         // Create a plane to represent the interaction plane
         const planeGeometry = new THREE.PlaneGeometry(1000, 1000);
-        const planeMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
-        this.interactingPlane = new THREE.Mesh( planeGeometry, planeMaterial );
+        const planeMaterial = new THREE.MeshBasicMaterial({
+            color: 0xffff00,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.5
+        });
+        this.interactingPlane = new THREE.Mesh(planeGeometry, planeMaterial);
         scene.add(this.interactingPlane);
         this.interactingPlane.visible = false;
 
@@ -178,7 +188,6 @@ export class OrbitalPointer {
         this.interactingPlane.position.add(normal.multiplyScalar(0.01 * Math.sign(normal.dot(this.raycaster.ray.direction))));
         this.interactingPlane.quaternion.copy(quaternion);
 
-
         // Call the user-defined callback function if it exists
         this.onPress?.();
     };
@@ -193,20 +202,22 @@ export class OrbitalPointer {
         this.raycaster.setFromCamera(this.pointer, this.cameraRef);
 
         // Calculate objects intersecting the picking ray
-        this.intersects = this.raycaster.intersectObjects(this.meshHopping ? [...this.getInteractables(), this.interactingPlane] : [this.touchMesh]);
+        this.intersects = this.raycaster.intersectObjects(
+            this.meshHopping ? [...this.getInteractables(), this.interactingPlane] : [this.touchMesh]
+        );
 
-        if (this.intersects.length > 0) {
-            // Update the touch point and mesh if the pointer moves over another mesh
-            this.touchPoint = this.intersects[0].point;
-            this.touchMesh = this.intersects[0].object as THREE.Mesh;
+        // If no objects are intersected, not an interaction (this generally won't happen, unless user goes beyond the "infinite" plane)
+        if (this.intersects.length === 0) return;
 
-            // Update the sphere position as the pointer moves
-            this.interactionSphere.position.copy(this.intersects[0].point);
-        } else {
-            // TODO: want to move the touch point to the closest point on the edge of the mesh
-            // ideally it would stay on the face that was touched last
-            // alternatively could have callback to let the client code handle whatever it wants to do here
-        }
+        // Update the touch point and mesh if the pointer moves over another mesh
+        this.touchPoint = this.intersects[0].point;
+        this.touchMesh = this.intersects[0].object as THREE.Mesh;
+
+        // Update the sphere position as the pointer moves
+        this.interactionSphere.position.copy(this.intersects[0].point);
+
+        // Call the user-defined callback function if it exists
+        this.onMove?.();
     };
 
     onPointerUp = () => {
