@@ -14,7 +14,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
  * @param onRelease - (optional) A user callback function to be called when the pointer is released
  * @param enablePan - (optional) A boolean to enable panning in orbit controls. Default is false
  * @param showPointer - (optional) A boolean to show a small sphere at the intersection point. Default is true
- * @param meshHopping - (optional) A boolean to allow the pointer to drag over multiple meshes, otherwise restricts to the first mesh hit. Default is false
+ * @param faceBounded - (optional) A boolean to restrict interaction to the bounds of the touched face of the interaction object. If false, an interaction can go beyond the face along an infinite plane. Default is true
  * @param multitouchDelay - (optional) A number in milliseconds within which a multi-touch may be detected. Shorter will feel more responsive, but may  Default is 20
  */
 type OrbitalPointerProps = {
@@ -28,7 +28,7 @@ type OrbitalPointerProps = {
     enablePan?: boolean;
     showPointer?: boolean;
     showPlane?: boolean;
-    meshHopping?: boolean;
+    faceBounded?: boolean; //TODO: rename to something like unbounded, or faceBounded, etc.
     multitouchDelayMs?: number;
 };
 
@@ -43,7 +43,7 @@ export class OrbitalPointer {
     pointer = new THREE.Vector2();
     showPointer: boolean;
     showPlane: boolean;
-    meshHopping: boolean;
+    faceBounded: boolean;
     raycaster = new THREE.Raycaster();
     multitouchTimer: number | null = null;
     multitouchDelayMs: number;
@@ -70,7 +70,7 @@ export class OrbitalPointer {
         enablePan = false,
         showPointer = true,
         showPlane = false,
-        meshHopping = false,
+        faceBounded = true,
         multitouchDelayMs = 20
     }: OrbitalPointerProps) {
         this.cameraRef = camera;
@@ -78,7 +78,7 @@ export class OrbitalPointer {
         this.controls.enablePan = enablePan;
         this.showPointer = showPointer;
         this.showPlane = showPlane;
-        this.meshHopping = meshHopping;
+        this.faceBounded = faceBounded;
         this.multitouchDelayMs = multitouchDelayMs;
         this.getInteractables = getInteractables;
         this.onPress = onPress;
@@ -210,15 +210,14 @@ export class OrbitalPointer {
 
         // Calculate objects intersecting the picking ray
         this.intersects = this.raycaster.intersectObjects(
-            this.meshHopping ? [...this.getInteractables(), this.interactingPlane] : [this.touchMesh]
+            this.faceBounded ? [this.touchMesh, this.interactingPlane] : [this.touchMesh]
         );
 
         // If no objects are intersected, not an interaction (this generally won't happen, unless user goes beyond the "infinite" plane)
         if (this.intersects.length === 0) return;
 
-        // Update the touch point and mesh if the pointer moves over another mesh
+        // Update the touch point based on the intersection
         this.touchPoint = this.intersects[0].point;
-        this.touchMesh = this.intersects[0].object as THREE.Mesh;
 
         // Update the sphere position as the pointer moves
         this.interactionSphere.position.copy(this.intersects[0].point);
