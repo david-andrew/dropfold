@@ -192,7 +192,7 @@ export class OrbitalPointer {
         const position = this.intersects[0].point;
         this.interactingPlane.position.copy(position);
         // shift the plane slightly back to avoid z-fighting
-        this.interactingPlane.position.add(this.touchNormal.multiplyScalar(-0.01));
+        this.interactingPlane.position.add(this.touchNormal.clone().multiplyScalar(-0.01));
         this.interactingPlane.quaternion.copy(quaternion);
 
         // Call the user-defined callback function if it exists
