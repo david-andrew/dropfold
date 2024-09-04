@@ -167,7 +167,6 @@ class BuildThingScene {
         this.edge_color = edge_color;
         this.face_color = face_color;
         this.debug_geometry = debug_geometry;
-        console.log('init', this.prime_clip_planes);
 
         // setup the scene
         this.renderer = renderer;
@@ -363,23 +362,23 @@ class BuildThingScene {
         // update the active edge to show the fold line
         this.delete_active_edge();
         this.compute_fold_endpoints();
-        // const fold_dir = this.to_point.clone().sub(this.from_point).normalize();
 
-        // offset p0->p1 by a small amount to avoid z-fighting
-        // let offset_p0 = this.p0.clone().add(fold_dir.clone().multiplyScalar(-0.1));
-        // let offset_p1 = this.p1.clone().add(fold_dir.clone().multiplyScalar(-0.1));
+        // if the fold line is too short (or out of bounds), don't draw the active edge
         if (this.p0.clone().sub(this.p1).lengthSq() < 0.001) return;
+
+        // determine if the active edge should be positive direction or negative direction
+        const front_side = new THREE.Vector3(0,0,1).dot(this.controls.touchNormal) > 0
+
         this.active_edge = new Edge({
             p1: [this.p0.x, this.p0.y],
             p0: [this.p1.x, this.p1.y],
-            thickness: 2 * this.layer_thickness, //TODO: this should be the thickness of the fold
+            thickness: (front_side ? 1 : -1) * this.layer_thickness * 2, //TODO: this should be the thickness of the fold, not hardcoded to 2
             z_offset: 0,
             color: this.face_color,
             edge_color: this.edge_color,
             clipping_planes: []
         });
         this.active_edge.add_to_scene(this.scene);
-        console.log('active edge', this.active_edge);
     };
 
     delete_active_edge = () => {
@@ -433,7 +432,7 @@ class BuildThingScene {
         }
 
         // determine if camera is on +z or -z side. So that we can make the fold towards the camera
-        // const front_side = this.controls.raycaster.ray.direction.dot(this.controls.touchNormal) > 0
+        // const front_side = new THREE.Vector3(0,0,1).dot(this.controls.touchNormal) > 0
 
         // convert intersections to world space
         const [local_p0, local_p1] = intersections;

@@ -21,7 +21,7 @@ export type SceneFunctions = {
 };
 
 const main = (scene_fn: (renderer) => SceneFunctions) => {
-    const renderer = new THREE.WebGLRenderer();
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.localClippingEnabled = true;
     renderer.setSize(window.innerWidth, window.innerHeight);
     gameView.appendChild(renderer.domElement);
