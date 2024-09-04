@@ -6,7 +6,7 @@ import { rotating_cube_scene } from './scenes/rotating_cube';
 import { test_touch_controls_scene } from './scenes/touch_controls_testing';
 import { clipping_plane_demo } from './scenes/clipping_plane_demo';
 import { business_card } from './scenes/business_card';
-import { build_thing_scene } from './scenes/build_thing';
+import { build_thing_scene, build_thing_from_seed, paper_plane_scene } from './scenes/build_thing';
 
 type SceneKey = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '0';
 const DEFAULT_SCENE_KEY: SceneKey = '1';
@@ -65,15 +65,15 @@ const scene_selector_main = () => {
     // prettier-ignore
     const scenes: SceneFactory[] = [
         rotating_cube_scene,
-        general_folding_scene([[-8.5/2, 11/2], [8.5/2, 11/2], [8.5/2, -11/2], [-8.5/2, -11/2]]),
-        general_folding_scene([[0, 10], [9.511, 3.09], [5.878, -8.09], [-5.878, -8.09], [-9.511, 3.09]]),
-        general_folding_scene([[10, 0], [5, 8.66], [-5, 8.66], [-10, 0], [-5, -8.66], [5, -8.66]]),
-        general_folding_scene([[0, 3], [-8.66, -5], [4.22, -5]]),
-        general_folding_scene([[0, 10], [10, 5], [5, -10], [0,-10], [-10, 0], [-5, 10]]),
+        build_thing_from_seed([[-8.5/2, 11/2], [8.5/2, 11/2], [8.5/2, -11/2], [-8.5/2, -11/2]]),
+        build_thing_from_seed([[0, 10], [9.511, 3.09], [5.878, -8.09], [-5.878, -8.09], [-9.511, 3.09]]),
+        build_thing_from_seed([[10, 0], [5, 8.66], [-5, 8.66], [-10, 0], [-5, -8.66], [5, -8.66]]),
+        build_thing_from_seed([[0, 3], [-8.66, -5], [4.22, -5]]),
+        build_thing_from_seed([[0, 10], [10, 5], [5, -10], [0,-10], [-10, 0], [-5, 10]]),
         test_touch_controls_scene,
         clipping_plane_demo,
         business_card, 
-        build_thing_scene,   
+        paper_plane_scene,   
     ]
     console.assert(scenes.length <= 10, 'Too many scenes included. Extra scenes will not be accessible via keyboard shortcuts.');
     const scene_button_map: Map<SceneKey, SceneFactory> = new Map<SceneKey, SceneFactory>();

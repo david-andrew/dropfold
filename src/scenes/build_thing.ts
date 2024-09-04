@@ -102,6 +102,7 @@ class Edge {
 }
 
 type BuildThingSceneProps = {
+    thing_t: ThingTemplate;
     renderer: THREE.WebGLRenderer;
     layer_thickness?: number;
     background_color?: THREE.ColorRepresentation;
@@ -128,6 +129,7 @@ class BuildThingScene {
     copy_clip_planes: THREE.Plane[] = [];
 
     // objects
+    thing_t: ThingTemplate;
     facets: Facet[];
     edges: Edge[];
     mesh_to_facet_idx: Map<THREE.Mesh, number>;
@@ -154,6 +156,7 @@ class BuildThingScene {
     ) => void;
 
     constructor({
+        thing_t,
         renderer,
         layer_thickness = 0.01,
         background_color = 0, //0x222222,
@@ -161,6 +164,8 @@ class BuildThingScene {
         face_color = 0, //0xffffff,
         debug_geometry = false
     }: BuildThingSceneProps) {
+        this.thing_t = thing_t;
+
         // set initialization parameters
         this.layer_thickness = layer_thickness;
         this.background_color = background_color;
@@ -173,7 +178,7 @@ class BuildThingScene {
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(this.background_color);
         this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        this.camera.position.z = 10;
+        this.camera.position.z = 15;
 
         // setup for clipping planes
         this.renderer.localClippingEnabled = true;
@@ -190,7 +195,7 @@ class BuildThingScene {
         // DEBUG set up meshes based on paper_plane_states (todo move this process into a method)
         // example of a plane layer
         // set dummy values for prime_group and copy_group
-        this.rebuild_thing(paper_plane_states[1]);
+        this.rebuild_thing(this.thing_t);
 
         // // debug random offset and orientation
         // this.prime_group.rotation.x = Math.PI / 4;
@@ -204,7 +209,7 @@ class BuildThingScene {
             getInteractables: () => this.facets.map((f) => f.mesh),
             onPress: this.on_press,
             onMove: this.on_move,
-            onRelease: this.on_release,
+            // onRelease: this.on_release,
             faceBounded: false,
             showPlane: false
         });
@@ -443,6 +448,9 @@ class BuildThingScene {
     };
 
     on_press = () => {
+        // DEBUG
+        this.on_release();
+
         this.fold_facet_idx = this.mesh_to_facet_idx.get(this.controls.touchMesh);
         this.update_closest_edge(this.fold_facet_idx);
         this.to_point.copy(this.controls.touchPoint);
@@ -486,11 +494,21 @@ class BuildThingScene {
     };
 }
 
-export const build_thing_scene = (renderer: THREE.WebGLRenderer): SceneFunctions => {
-    const scene = new BuildThingScene({ renderer });
+
+export const build_thing_scene = (thing_t: ThingTemplate) => (renderer: THREE.WebGLRenderer): SceneFunctions => {
+    const scene = new BuildThingScene({ thing_t, renderer });
     return {
         update_scene: scene.update_scene,
         camera: scene.camera,
         resetter: scene.resetter
     };
-};
+}
+
+export const build_thing_from_seed = (verts: [number, number][]) => (renderer: THREE.WebGLRenderer): SceneFunctions => {
+    const thing_t: ThingTemplate = [[{ vertices: verts, links: verts.map(_ => null) }]];
+    return build_thing_scene(thing_t)(renderer);
+}
+
+export const paper_plane_scene = (renderer: THREE.WebGLRenderer): SceneFunctions => {
+    return build_thing_scene(paper_plane_states[2])(renderer);
+}
