@@ -17,6 +17,7 @@ type FacetProps = {
     z_offset?: number;
     color: THREE.ColorRepresentation;
     edge_color: THREE.ColorRepresentation;
+    clipping_planes: THREE.Plane[];
 };
 
 class Facet {
@@ -24,7 +25,7 @@ class Facet {
     mesh: THREE.Mesh;
     lines: Line2; // THREE.LineSegments;
 
-    constructor({ vertices, z_offset = 0.0, color, edge_color }: FacetProps) {
+    constructor({ vertices, z_offset = 0.0, color, edge_color, clipping_planes }: FacetProps) {
         // make the mesh
         this.vertices = vertices.map(([x, y]) => new THREE.Vector2(x, y));
         const shape = new THREE.Shape(this.vertices);
@@ -60,12 +61,13 @@ type EdgeProps = {
     z_offset: number;
     color: THREE.ColorRepresentation;
     edge_color: THREE.ColorRepresentation;
+    clipping_planes: THREE.Plane[];
 };
 class Edge {
     mesh: THREE.Mesh;
     lines: Line2; //THREE.LineSegments;
 
-    constructor({ p0, p1, thickness, z_offset, color, edge_color }: EdgeProps) {
+    constructor({ p0, p1, thickness, z_offset, color, edge_color, clipping_planes }: EdgeProps) {
         // directly build the geometry in 3D with a BufferGeometry
         const geometry = new THREE.BufferGeometry();
         // prettier-ignore
@@ -121,12 +123,16 @@ class BuildThingScene {
     renderer: THREE.WebGLRenderer;
     controls: OrbitalPointer;
 
+    // clipping planes
+    prime_clip_planes: THREE.Plane[];
+    copy_clip_planes: THREE.Plane[];
+
     // objects
     facets: Facet[];
     edges: Edge[];
     mesh_to_facet_idx: Map<THREE.Mesh, number>;
-    group: THREE.Group;
-    group_copy: THREE.Group;
+    prime_group: THREE.Group;
+    copy_group: THREE.Group;
 
     // fold tracking parameters
     fold_facet_idx: number = -1; // The index of the initially touched facet at the start of a fold
@@ -135,7 +141,6 @@ class BuildThingScene {
     to_point = new THREE.Vector3(); // The current pointer location (start point should move to this point to accomplish the fold)
     p0 = new THREE.Vector3(); // The start point of the fold line
     p1 = new THREE.Vector3(); // The end point of the fold line
-    // fold_normal = new THREE.Vector3(); // The normal of the fold plane
 
     // included methods
     hide_debug_geometry: () => void;
@@ -169,6 +174,10 @@ class BuildThingScene {
         this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         this.camera.position.z = 10;
 
+        // setup for clipping planes
+        this.renderer.localClippingEnabled = true;
+        this.renderer.clippingPlanes = []; // all clipping planes will be local to the object
+
         // setup debug geometry
         const { hide_debug_geometry, show_debug_geometry } = setup_debug_geometry(this.scene, this.debug_geometry);
         this.hide_debug_geometry = hide_debug_geometry;
@@ -184,8 +193,8 @@ class BuildThingScene {
 
         // DEBUG set up meshes based on paper_plane_states (todo move this process into a method)
         // example of a plane layer
-        // set dummy values for group and group_copy
-        this.rebuild_thing(paper_plane_states[2]);
+        // set dummy values for prime_group and copy_group
+        this.rebuild_thing(paper_plane_states[1]);
 
         this.controls = new OrbitalPointer({
             camera: this.camera,
@@ -200,30 +209,22 @@ class BuildThingScene {
         });
     }
 
-    rebuild_thing = (thing_t: ThingTemplate) => {
-        // quick and dirty debug
-        if (this.group && this.group_copy) {
-            this.scene.remove(this.group);
-            this.group = new THREE.Group();
-            this.scene.remove(this.group_copy);
-            this.group_copy = new THREE.Group();
-        }
-        this.group = new THREE.Group();
-        this.facets = [];
-        this.edges = [];
-        this.mesh_to_facet_idx = new Map<THREE.Mesh, number>();
+    construct_thing = (thing_t: ThingTemplate, clipping_planes: THREE.Plane[], is_prime: boolean): THREE.Group => {
+        const group = new THREE.Group();
+        const facets = [];
+        const edges = [];
         thing_t.forEach((layer, i) =>
             layer.forEach((facet_t) => {
                 const f = new Facet({
                     vertices: facet_t.vertices,
                     z_offset: i * this.layer_thickness,
                     color: this.face_color,
-                    edge_color: this.edge_color
+                    edge_color: this.edge_color,
+                    clipping_planes
                 });
-                this.mesh_to_facet_idx.set(f.mesh, this.facets.length);
-                this.facets.push(f);
-                this.group.add(f.mesh);
-                this.group.add(f.lines);
+                facets.push(f);
+                group.add(f.mesh);
+                group.add(f.lines);
 
                 // handle any edge links
                 facet_t.links.forEach((link, j) => {
@@ -237,20 +238,46 @@ class BuildThingScene {
                         thickness: layer_offset * this.layer_thickness,
                         z_offset: i * this.layer_thickness,
                         color: this.face_color,
-                        edge_color: this.edge_color
+                        edge_color: this.edge_color,
+                        clipping_planes
                     });
-                    this.edges.push(edge);
-                    this.group.add(edge.mesh);
-                    this.group.add(edge.lines);
+                    edges.push(edge);
+                    group.add(edge.mesh);
+                    group.add(edge.lines);
                 });
             })
         );
-        // add the group and a copy to the scene
-        this.scene.add(this.group);
-        this.group_copy = this.group.clone();
-        this.scene.add(this.group_copy);
-        this.group_copy.visible = false;
-        // this.group_copy.position.z = -5; // just for debug
+
+        // for the prime version, save its facets and edges to the class
+        if (is_prime) {
+            this.facets = facets;
+            this.edges = edges;
+            this.mesh_to_facet_idx = new Map<THREE.Mesh, number>();
+            facets.forEach((f, i) => {
+                this.mesh_to_facet_idx.set(f.mesh, i);
+            });
+        }
+
+        return group;
+    };
+
+    rebuild_thing = (thing_t: ThingTemplate) => {
+        // quick and dirty debug
+        if (this.prime_group && this.copy_group) {
+            this.scene.remove(this.prime_group);
+            this.prime_group = new THREE.Group();
+            this.scene.remove(this.copy_group);
+            this.copy_group = new THREE.Group();
+        }
+
+        // construct the group and the copy
+        this.prime_group = this.construct_thing(thing_t, [], true);
+        this.copy_group = this.construct_thing(thing_t, [], false);
+
+        // add the group and the copy to the scene
+        this.scene.add(this.prime_group);
+        this.scene.add(this.copy_group);
+        this.copy_group.visible = false;
     };
 
     // only call on initial press
@@ -289,23 +316,28 @@ class BuildThingScene {
         this.mid_point.copy(this.from_point).lerp(this.to_point, 0.5);
     };
 
-    // transform the group_copy across the fold
-    tranform_group_copy = () => {
+    // transform the copy_group across the fold
+    transform_copy_group = () => {
         // get the unit vector from the from_point to the to_point and compute the axis to fold over
         const fold_dir = this.to_point.clone().sub(this.from_point).normalize();
         const fold_axis = new THREE.Vector3().crossVectors(fold_dir, this.controls.touchNormal).normalize();
 
         // ensure the copy starts at the same position as the original
-        this.group_copy.position.copy(this.group.position);
-        this.group_copy.rotation.copy(this.group.rotation);
+        this.copy_group.position.copy(this.prime_group.position);
+        this.copy_group.rotation.copy(this.prime_group.rotation);
 
-        // create a transform to rotate the group_copy around the fold axis by 180 degrees
+        // create a transform to rotate the copy_group around the fold axis by 180 degrees
         const transform = new THREE.Matrix4();
         transform.makeRotationAxis(fold_axis, Math.PI);
-        this.group_copy.position.sub(this.mid_point);
-        this.group_copy.applyMatrix4(transform);
-        this.group_copy.position.add(this.mid_point);
+        this.copy_group.position.sub(this.mid_point);
+        this.copy_group.applyMatrix4(transform);
+        this.copy_group.position.add(this.mid_point);
+
+        // TOOD: this should shift the number of layers of the fold. Currently, it just shifts by 2 layers
+        this.copy_group.position.add(this.controls.touchNormal.clone().multiplyScalar(this.layer_thickness * 2));
     };
+
+    update_clipping_planes = () => {};
 
     on_press = () => {
         this.fold_facet_idx = this.mesh_to_facet_idx.get(this.controls.touchMesh);
@@ -314,20 +346,20 @@ class BuildThingScene {
         this.update_midpoint();
         // this.fold_normal.copy(this.controls.touchNormal);
 
-        // show the group_copy
-        this.group_copy.visible = true;
-        this.tranform_group_copy();
+        // show the copy_group
+        this.copy_group.visible = true;
+        this.transform_copy_group();
     };
 
     on_move = () => {
         this.to_point.copy(this.controls.touchPoint);
         this.update_midpoint();
-        this.tranform_group_copy();
+        this.transform_copy_group();
     };
 
     on_release = () => {
         this.fold_facet_idx = -1;
-        this.group_copy.visible = false;
+        this.copy_group.visible = false;
     };
 
     update_scene = () => {
