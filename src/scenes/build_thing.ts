@@ -30,7 +30,7 @@ class Facet {
         this.vertices = vertices.map(([x, y]) => new THREE.Vector2(x, y));
         const shape = new THREE.Shape(this.vertices);
         const geometry = new THREE.ShapeGeometry(shape);
-        const material = new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide });
+        const material = new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, clippingPlanes: clipping_planes });
         this.mesh = new THREE.Mesh(geometry, material);
         this.mesh.position.z = z_offset;
 
@@ -43,7 +43,7 @@ class Facet {
         // make the lines with Line2
         const lineGeometry = new LineGeometry();
         lineGeometry.setPositions([...this.vertices, this.vertices[0]].map((v) => [v.x, v.y, z_offset]).flat());
-        const lineMaterial = new LineMaterial({ color: edge_color, linewidth: 2 });
+        const lineMaterial = new LineMaterial({ color: edge_color, linewidth: 2, clippingPlanes: clipping_planes });
         lineMaterial.resolution.set(window.innerWidth, window.innerHeight);
         this.lines = new Line2(lineGeometry, lineMaterial);
     }
@@ -79,7 +79,7 @@ class Edge {
         ]);
         geometry.setIndex([0, 1, 2, 2, 3, 0]);
         geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-        const material = new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide });
+        const material = new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, clippingPlanes: clipping_planes });
         this.mesh = new THREE.Mesh(geometry, material);
 
         // // make the lines
@@ -90,7 +90,7 @@ class Edge {
         // make the lines with Line2
         const lineGeometry = new LineGeometry();
         lineGeometry.setPositions(vertices);
-        const lineMaterial = new LineMaterial({ color: edge_color, linewidth: 2 });
+        const lineMaterial = new LineMaterial({ color: edge_color, linewidth: 2, clippingPlanes: clipping_planes });
         lineMaterial.resolution.set(window.innerWidth, window.innerHeight);
         this.lines = new Line2(lineGeometry, lineMaterial);
     }
@@ -124,8 +124,8 @@ class BuildThingScene {
     controls: OrbitalPointer;
 
     // clipping planes
-    prime_clip_planes: THREE.Plane[];
-    copy_clip_planes: THREE.Plane[];
+    prime_clip_planes: THREE.Plane[] = [];
+    copy_clip_planes: THREE.Plane[] = [];
 
     // objects
     facets: Facet[];
@@ -155,9 +155,9 @@ class BuildThingScene {
     constructor({
         renderer,
         layer_thickness = 0.01,
-        background_color = 0x222222,
-        edge_color = 0x000000,
-        face_color = 0xffffff,
+        background_color = 0, //0x222222,
+        edge_color = 0xffffff, //0x000000,
+        face_color = 0, //0xffffff,
         debug_geometry = true
     }: BuildThingSceneProps) {
         // set initialization parameters
@@ -166,6 +166,7 @@ class BuildThingScene {
         this.edge_color = edge_color;
         this.face_color = face_color;
         this.debug_geometry = debug_geometry;
+        console.log('init', this.prime_clip_planes);
 
         // setup the scene
         this.renderer = renderer;
@@ -177,6 +178,9 @@ class BuildThingScene {
         // setup for clipping planes
         this.renderer.localClippingEnabled = true;
         this.renderer.clippingPlanes = []; // all clipping planes will be local to the object
+        this.prime_clip_planes.push(new THREE.Plane(new THREE.Vector3(0, 1, 0).normalize(), 0));
+        this.copy_clip_planes.push(new THREE.Plane(new THREE.Vector3(0, 1, 0).normalize(), 0));
+        this.disable_clipping_planes();
 
         // setup debug geometry
         const { hide_debug_geometry, show_debug_geometry } = setup_debug_geometry(this.scene, this.debug_geometry);
@@ -271,8 +275,8 @@ class BuildThingScene {
         }
 
         // construct the group and the copy
-        this.prime_group = this.construct_thing(thing_t, [], true);
-        this.copy_group = this.construct_thing(thing_t, [], false);
+        this.prime_group = this.construct_thing(thing_t, this.prime_clip_planes, true);
+        this.copy_group = this.construct_thing(thing_t, this.copy_clip_planes, false);
 
         // add the group and the copy to the scene
         this.scene.add(this.prime_group);
@@ -335,9 +339,26 @@ class BuildThingScene {
 
         // TOOD: this should shift the number of layers of the fold. Currently, it just shifts by 2 layers
         this.copy_group.position.add(this.controls.touchNormal.clone().multiplyScalar(this.layer_thickness * 2));
+
+        this.update_clipping_planes();
     };
 
-    update_clipping_planes = () => {};
+    // should only call during fold
+    update_clipping_planes = () => {
+        // update the positions of the clipping planes according to the fold
+        const fold_dir = this.to_point.clone().sub(this.from_point).normalize();
+        const constant = -this.mid_point.dot(fold_dir);
+        this.prime_clip_planes[0].normal.copy(fold_dir);
+        this.prime_clip_planes[0].constant = constant;
+        this.copy_clip_planes[0].normal.copy(fold_dir);
+        this.copy_clip_planes[0].constant = constant;
+    };
+
+    disable_clipping_planes = () => {
+        //just set the constant to a large number to disable clipping
+        this.prime_clip_planes[0].constant = 1000;
+        this.copy_clip_planes[0].constant = 1000;
+    };
 
     on_press = () => {
         this.fold_facet_idx = this.mesh_to_facet_idx.get(this.controls.touchMesh);
@@ -360,6 +381,7 @@ class BuildThingScene {
     on_release = () => {
         this.fold_facet_idx = -1;
         this.copy_group.visible = false;
+        this.disable_clipping_planes();
     };
 
     update_scene = () => {
