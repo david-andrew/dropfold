@@ -4,7 +4,7 @@ import { clamp } from 'three/src/math/MathUtils.js';
 import { SceneFunctions } from '../main';
 import { states as paper_plane_states, ThingTemplate } from './test_paper_plane';
 import { OrbitalPointer } from '../controls';
-import { setup_debug_geometry } from '../utils';
+import { setup_debug_geometry, getLineIntersection } from '../utils';
 
 import { Line2 } from 'three/examples/jsm/lines/Line2.js';
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
@@ -89,7 +89,7 @@ class Edge {
 
         // make the lines with Line2
         const lineGeometry = new LineGeometry();
-        lineGeometry.setPositions(vertices);
+        lineGeometry.setPositions([...vertices, ...vertices.slice(0, 3)]);
         const lineMaterial = new LineMaterial({ color: edge_color, linewidth: 2, clippingPlanes: clipping_planes });
         lineMaterial.resolution.set(window.innerWidth, window.innerHeight);
         this.lines = new Line2(lineGeometry, lineMaterial);
@@ -133,6 +133,7 @@ class BuildThingScene {
     mesh_to_facet_idx: Map<THREE.Mesh, number>;
     prime_group: THREE.Group;
     copy_group: THREE.Group;
+    active_edge: Edge | null = null; // so we can draw the edge currently being folded
 
     // fold tracking parameters
     fold_facet_idx: number = -1; // The index of the initially touched facet at the start of a fold
@@ -158,7 +159,7 @@ class BuildThingScene {
         background_color = 0, //0x222222,
         edge_color = 0xffffff, //0x000000,
         face_color = 0, //0xffffff,
-        debug_geometry = true
+        debug_geometry = false
     }: BuildThingSceneProps) {
         // set initialization parameters
         this.layer_thickness = layer_thickness;
@@ -186,20 +187,17 @@ class BuildThingScene {
         const { hide_debug_geometry, show_debug_geometry } = setup_debug_geometry(this.scene, this.debug_geometry);
         this.hide_debug_geometry = hide_debug_geometry;
         this.show_debug_geometry = show_debug_geometry;
-        // debug test
-        this.show_debug_geometry(
-            new THREE.Vector3(0, 0, 0),
-            new THREE.Vector3(1, 1, 0),
-            new THREE.Vector3(2, 2, 0),
-            new THREE.Vector3(2, 0, 0),
-            new THREE.Vector3(0, 2, 0)
-        );
 
         // DEBUG set up meshes based on paper_plane_states (todo move this process into a method)
         // example of a plane layer
         // set dummy values for prime_group and copy_group
         this.rebuild_thing(paper_plane_states[1]);
 
+        // // debug random offset and orientation
+        // this.prime_group.rotation.x = Math.PI / 4;
+        // this.prime_group.position.y = 1;
+
+        // set up controls
         this.controls = new OrbitalPointer({
             camera: this.camera,
             scene: this.scene,
@@ -341,6 +339,7 @@ class BuildThingScene {
         this.copy_group.position.add(this.controls.touchNormal.clone().multiplyScalar(this.layer_thickness * 2));
 
         this.update_clipping_planes();
+        this.update_active_edge();
     };
 
     // should only call during fold
@@ -358,6 +357,90 @@ class BuildThingScene {
         //just set the constant to a large number to disable clipping
         this.prime_clip_planes[0].constant = 1000;
         this.copy_clip_planes[0].constant = 1000;
+    };
+
+    update_active_edge = () => {
+        // update the active edge to show the fold line
+        this.delete_active_edge();
+        this.compute_fold_endpoints();
+        // const fold_dir = this.to_point.clone().sub(this.from_point).normalize();
+
+        // offset p0->p1 by a small amount to avoid z-fighting
+        // let offset_p0 = this.p0.clone().add(fold_dir.clone().multiplyScalar(-0.1));
+        // let offset_p1 = this.p1.clone().add(fold_dir.clone().multiplyScalar(-0.1));
+        if (this.p0.clone().sub(this.p1).lengthSq() < 0.001) return;
+        this.active_edge = new Edge({
+            p1: [this.p0.x, this.p0.y],
+            p0: [this.p1.x, this.p1.y],
+            thickness: 2 * this.layer_thickness, //TODO: this should be the thickness of the fold
+            z_offset: 0,
+            color: this.face_color,
+            edge_color: this.edge_color,
+            clipping_planes: []
+        });
+        this.active_edge.add_to_scene(this.scene);
+        console.log('active edge', this.active_edge);
+    };
+
+    delete_active_edge = () => {
+        if (this.active_edge) {
+            this.scene.remove(this.active_edge.mesh);
+            this.scene.remove(this.active_edge.lines);
+            this.active_edge = null;
+        }
+    };
+
+    // should only call during fold
+    compute_fold_endpoints = () => {
+        //compute p0 and p1 based on the from_point, mid_point, and to_point, and the mesh being folded
+
+        // Transform the 2D shape points to 3D
+        const facet = this.facets[this.fold_facet_idx];
+        const shapeVertices = facet.vertices.map((v) => new THREE.Vector2(v.x, v.y));
+
+        // convert the direction to 2D by projecting the line into the mesh's frame
+        const inv_tf = facet.mesh.matrixWorld.clone().invert();
+        const local_mid_point = this.mid_point.clone().applyMatrix4(inv_tf);
+        const local_from_point = this.from_point.clone().applyMatrix4(inv_tf);
+        const local_to_point = this.to_point.clone().applyMatrix4(inv_tf);
+
+        const localDirection = local_from_point.clone().sub(local_to_point).normalize();
+        const point2d = new THREE.Vector2(local_mid_point.x, local_mid_point.y);
+        const perpdir = new THREE.Vector2(-localDirection.y, localDirection.x);
+        const dividing_line_2d = [point2d, point2d.clone().add(perpdir)] as const;
+
+        // determine which edges of the shape intersect the perpendicular line
+        const intersections: THREE.Vector2[] = [];
+        const intersect_idxs: number[] = [];
+        for (let i = 1; i < shapeVertices.length + 1; i++) {
+            const A = shapeVertices[i - 1];
+            const B = shapeVertices[i % shapeVertices.length];
+            const intersection = getLineIntersection([A, B], dividing_line_2d);
+            if (intersection !== null) {
+                intersections.push(intersection);
+                intersect_idxs.push(i - 1);
+            }
+        }
+        if (intersections.length < 2) {
+            // dividingLine.visible = false;
+            this.delete_active_edge();
+            this.p0 = new THREE.Vector3();
+            this.p1 = new THREE.Vector3();
+            return;
+        }
+        if (intersections.length > 2) {
+            console.error('More than 2 intersections found');
+        }
+
+        // determine if camera is on +z or -z side. So that we can make the fold towards the camera
+        // const front_side = this.controls.raycaster.ray.direction.dot(this.controls.touchNormal) > 0
+
+        // convert intersections to world space
+        const [local_p0, local_p1] = intersections;
+        this.p0 = new THREE.Vector3(local_p0.x, local_p0.y, 0);
+        this.p1 = new THREE.Vector3(local_p1.x, local_p1.y, 0);
+        this.p0.applyMatrix4(facet.mesh.matrixWorld);
+        this.p1.applyMatrix4(facet.mesh.matrixWorld);
     };
 
     on_press = () => {
@@ -382,6 +465,9 @@ class BuildThingScene {
         this.fold_facet_idx = -1;
         this.copy_group.visible = false;
         this.disable_clipping_planes();
+
+        // remove the active edge
+        this.delete_active_edge();
     };
 
     update_scene = () => {

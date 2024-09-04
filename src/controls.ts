@@ -68,7 +68,7 @@ export class OrbitalPointer {
         onMove,
         onRelease,
         enablePan = false,
-        showPointer = true,
+        showPointer = false,
         showPlane = false,
         faceBounded = true,
         multitouchDelayMs = 20
