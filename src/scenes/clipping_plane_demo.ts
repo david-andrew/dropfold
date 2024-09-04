@@ -8,7 +8,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { SceneFunctions } from '../main';
 
 
-let camera, scene, renderer, startTime, object, localPlane, stats;
+let camera, scene, renderer, startTime, object, localPlane, stats, gui;
 export const clipping_plane_demo = (renderer: THREE.WebGLRenderer): SceneFunctions => {
     init(renderer);
 
@@ -33,7 +33,19 @@ export const clipping_plane_demo = (renderer: THREE.WebGLRenderer): SceneFunctio
         stats.end();
     
     }
-    const resetter = () => {}
+    const resetter = () => {
+        //clear the gui and reset all objects
+        gui.destroy();
+        stats.dom.remove();
+        scene = undefined;
+        camera = undefined;
+        renderer = undefined;
+        startTime = undefined;
+        object = undefined;
+        localPlane = undefined;
+        stats = undefined;
+        gui = undefined;
+    }
 
     return { update_scene, resetter, camera }
 }
@@ -142,8 +154,8 @@ const init = (renderer: THREE.WebGLRenderer) => {
 
     // GUI
 
-    const gui = new GUI(),
-        props = {
+    gui = new GUI();
+    const props = {
             alphaToCoverage: true,
         },
         folderLocal = gui.addFolder( 'Local Clipping' ),
