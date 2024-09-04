@@ -6,6 +6,38 @@ import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 
 export const cross2d = (a: THREE.Vector2, b: THREE.Vector2) => a.x * b.y - a.y * b.x;
 
+type Line = readonly [THREE.Vector2, THREE.Vector2];
+export const getLineIntersection = (segment: Line, line: Line): THREE.Vector2 | null => {
+    const [A, B] = segment;
+    const [C, D] = line;
+
+    // Calculate the direction vectors
+    const AB = new THREE.Vector2().subVectors(B, A);
+    const CD = new THREE.Vector2().subVectors(D, C);
+
+    // Calculate the denominator
+    const denominator = AB.x * CD.y - AB.y * CD.x;
+
+    // Lines are parallel if denominator is 0
+    if (denominator === 0) {
+        return null; // No intersection
+    }
+
+    // Calculate t and s
+    const AC = new THREE.Vector2().subVectors(C, A);
+    const t = (AC.x * CD.y - AC.y * CD.x) / denominator;
+    // const s = (AC.x * AB.y - AC.y * AB.x) / denominator; //don't use since CD is infinite in length
+
+    // Check if the intersection lies within the line segment
+    if (t >= 0 && t <= 1) {
+        // Calculate the intersection point
+        const intersection = A.clone().add(AB.multiplyScalar(t));
+        return intersection;
+    }
+
+    return null; // No intersection within the segment
+};
+
 export const setup_debug_geometry = (scene: THREE.Scene, debug: boolean) => {
     if (!debug) {
         return { hide_debug_geometry: () => {}, show_debug_geometry: () => {} };

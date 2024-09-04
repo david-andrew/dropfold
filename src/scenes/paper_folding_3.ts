@@ -4,7 +4,7 @@ import { SceneFunctions } from '../main';
 import { Vector2 as vec2, Vector3 as vec3 } from 'three';
 import { clamp, randInt } from 'three/src/math/MathUtils.js';
 import { OrbitalPointer } from '../controls';
-import { setup_debug_geometry } from '../utils';
+import { setup_debug_geometry, getLineIntersection } from '../utils';
 
 
 import { Line2 } from 'three/examples/jsm/lines/Line2.js';
@@ -273,7 +273,7 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>, paper
         const localDirection = localBluePos.clone().sub(localRedPos).normalize()
         const point2d = new vec2(localMidpoint.x, localMidpoint.y)
         const perpdir = new vec2(-localDirection.y, localDirection.x)
-        const dividing_line_2d = {C: point2d, D: point2d.clone().add(perpdir)}
+        const dividing_line_2d = [point2d, point2d.clone().add(perpdir)] as const
 
         // determine which edges of the shape intersect the perpendicular line
         const intersections: Array<vec2> = []
@@ -281,7 +281,7 @@ export const general_folding_scene = (seed_shape: Array<[number, number]>, paper
         for (let i = 1; i < shapeVertices.length + 1; i++) {
             const A = shapeVertices[i - 1]
             const B = shapeVertices[i % shapeVertices.length]
-            const intersection = getLineIntersection({A, B}, dividing_line_2d)
+            const intersection = getLineIntersection([A, B], dividing_line_2d)
             if (intersection !== null) {
                 intersections.push(intersection)
                 intersect_idxs.push(i-1)
@@ -477,40 +477,3 @@ const make_edge_shape = (p0: vec2, p1: vec2, zshiftsign: -1|1, paper_color: numb
 
     return shape
 }
-
-const getLineIntersection = (segment: {A: vec2, B: vec2}, line: {C: vec2, D: vec2}) => {
-    const {A, B} = segment
-    const {C, D} = line
-
-    // Calculate the direction vectors
-    const AB = new THREE.Vector2().subVectors(B, A);
-    const CD = new THREE.Vector2().subVectors(D, C);
-
-    // Calculate the denominator
-    const denominator = AB.x * CD.y - AB.y * CD.x;
-
-    // Lines are parallel if denominator is 0
-    if (denominator === 0) {
-        return null; // No intersection
-    }
-
-    // Calculate t and s
-    const AC = new THREE.Vector2().subVectors(C, A);
-    const t = (AC.x * CD.y - AC.y * CD.x) / denominator;
-    // const s = (AC.x * AB.y - AC.y * AB.x) / denominator; //don't use since CD is infinite in length
-
-    // Check if the intersection lies within the line segment
-    if (t >= 0 && t <= 1) {
-        // Calculate the intersection point
-        const intersection = A.clone().add(AB.multiplyScalar(t));
-        return intersection;
-    }
-
-    return null; // No intersection within the segment
-}
-
-
-
-
-
-
