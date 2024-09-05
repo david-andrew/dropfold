@@ -10,96 +10,27 @@ import { Line2 } from 'three/examples/jsm/lines/Line2.js';
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 
-// simple scene that takes the frames from test_paper_plane and makes the corresponding mesh out of them
+export const build_thing_scene =
+    (thing_t: ThingTemplate) =>
+    (renderer: THREE.WebGLRenderer): SceneFunctions => {
+        const scene = new BuildThingScene({ thing_t, renderer });
+        return {
+            update_scene: scene.update_scene,
+            camera: scene.camera,
+            resetter: scene.resetter
+        };
+    };
 
-type FacetProps = {
-    vertices: Array<[number, number]>;
-    z_offset?: number;
-    color: THREE.ColorRepresentation;
-    edge_color: THREE.ColorRepresentation;
-    clipping_planes: THREE.Plane[];
+export const build_thing_from_seed =
+    (verts: [number, number][]) =>
+    (renderer: THREE.WebGLRenderer): SceneFunctions => {
+        const thing_t: ThingTemplate = [[{ vertices: verts, links: verts.map((_) => null) }]];
+        return build_thing_scene(thing_t)(renderer);
+    };
+
+export const paper_plane_scene = (renderer: THREE.WebGLRenderer): SceneFunctions => {
+    return build_thing_scene(paper_plane_states[2])(renderer);
 };
-
-class Facet {
-    vertices: THREE.Vector2[];
-    mesh: THREE.Mesh;
-    lines: Line2; // THREE.LineSegments;
-
-    constructor({ vertices, z_offset = 0.0, color, edge_color, clipping_planes }: FacetProps) {
-        // make the mesh
-        this.vertices = vertices.map(([x, y]) => new THREE.Vector2(x, y));
-        const shape = new THREE.Shape(this.vertices);
-        const geometry = new THREE.ShapeGeometry(shape);
-        const material = new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, clippingPlanes: clipping_planes });
-        this.mesh = new THREE.Mesh(geometry, material);
-        this.mesh.position.z = z_offset;
-
-        // // make the lines
-        // const lines = new THREE.EdgesGeometry(geometry);
-        // const linesMaterial = new THREE.LineBasicMaterial({ color: edge_color });
-        // this.lines = new THREE.LineSegments(lines, linesMaterial);
-        // this.lines.position.z = z_offset;
-
-        // make the lines with Line2
-        const lineGeometry = new LineGeometry();
-        lineGeometry.setPositions([...this.vertices, this.vertices[0]].map((v) => [v.x, v.y, z_offset]).flat());
-        const lineMaterial = new LineMaterial({ color: edge_color, linewidth: 2, clippingPlanes: clipping_planes });
-        lineMaterial.resolution.set(window.innerWidth, window.innerHeight);
-        this.lines = new Line2(lineGeometry, lineMaterial);
-    }
-
-    add_to_scene(scene: THREE.Scene) {
-        scene.add(this.mesh);
-        scene.add(this.lines);
-    }
-}
-
-type EdgeProps = {
-    p0: [number, number];
-    p1: [number, number];
-    thickness: number;
-    z_offset: number;
-    color: THREE.ColorRepresentation;
-    edge_color: THREE.ColorRepresentation;
-    clipping_planes: THREE.Plane[];
-};
-class Edge {
-    mesh: THREE.Mesh;
-    lines: Line2; //THREE.LineSegments;
-
-    constructor({ p0, p1, thickness, z_offset, color, edge_color, clipping_planes }: EdgeProps) {
-        // directly build the geometry in 3D with a BufferGeometry
-        const geometry = new THREE.BufferGeometry();
-        // prettier-ignore
-        const vertices = new Float32Array([
-            p0[0], p0[1], z_offset + thickness,
-            p0[0], p0[1], z_offset,
-            p1[0], p1[1], z_offset,
-            p1[0], p1[1], z_offset + thickness
-        ]);
-        geometry.setIndex([0, 1, 2, 2, 3, 0]);
-        geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-        const material = new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, clippingPlanes: clipping_planes });
-        this.mesh = new THREE.Mesh(geometry, material);
-
-        // // make the lines
-        // const lines = new THREE.EdgesGeometry(geometry);
-        // const linesMaterial = new THREE.LineBasicMaterial({ color: edge_color });
-        // this.lines = new THREE.LineSegments(lines, linesMaterial);
-
-        // make the lines with Line2
-        const lineGeometry = new LineGeometry();
-        lineGeometry.setPositions([...vertices, ...vertices.slice(0, 3)]);
-        const lineMaterial = new LineMaterial({ color: edge_color, linewidth: 2, clippingPlanes: clipping_planes });
-        lineMaterial.resolution.set(window.innerWidth, window.innerHeight);
-        this.lines = new Line2(lineGeometry, lineMaterial);
-    }
-
-    add_to_scene(scene: THREE.Scene) {
-        scene.add(this.mesh);
-        scene.add(this.lines);
-    }
-}
 
 type BuildThingSceneProps = {
     thing_t: ThingTemplate;
@@ -209,7 +140,7 @@ class BuildThingScene {
             getInteractables: () => this.facets.map((f) => f.mesh),
             onPress: this.on_press,
             onMove: this.on_move,
-            // onRelease: this.on_release,
+            // onRelease: this.on_release, //TODO: uncomment this when we have proper handling of apply_fold()
             faceBounded: false,
             showPlane: false
         });
@@ -524,24 +455,91 @@ class BuildThingScene {
     };
 }
 
-export const build_thing_scene =
-    (thing_t: ThingTemplate) =>
-    (renderer: THREE.WebGLRenderer): SceneFunctions => {
-        const scene = new BuildThingScene({ thing_t, renderer });
-        return {
-            update_scene: scene.update_scene,
-            camera: scene.camera,
-            resetter: scene.resetter
-        };
-    };
-
-export const build_thing_from_seed =
-    (verts: [number, number][]) =>
-    (renderer: THREE.WebGLRenderer): SceneFunctions => {
-        const thing_t: ThingTemplate = [[{ vertices: verts, links: verts.map((_) => null) }]];
-        return build_thing_scene(thing_t)(renderer);
-    };
-
-export const paper_plane_scene = (renderer: THREE.WebGLRenderer): SceneFunctions => {
-    return build_thing_scene(paper_plane_states[2])(renderer);
+type FacetProps = {
+    vertices: Array<[number, number]>;
+    z_offset?: number;
+    color: THREE.ColorRepresentation;
+    edge_color: THREE.ColorRepresentation;
+    clipping_planes: THREE.Plane[];
 };
+
+class Facet {
+    vertices: THREE.Vector2[];
+    mesh: THREE.Mesh;
+    lines: Line2; // THREE.LineSegments;
+
+    constructor({ vertices, z_offset = 0.0, color, edge_color, clipping_planes }: FacetProps) {
+        // make the mesh
+        this.vertices = vertices.map(([x, y]) => new THREE.Vector2(x, y));
+        const shape = new THREE.Shape(this.vertices);
+        const geometry = new THREE.ShapeGeometry(shape);
+        const material = new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, clippingPlanes: clipping_planes });
+        this.mesh = new THREE.Mesh(geometry, material);
+        this.mesh.position.z = z_offset;
+
+        // // make the lines
+        // const lines = new THREE.EdgesGeometry(geometry);
+        // const linesMaterial = new THREE.LineBasicMaterial({ color: edge_color });
+        // this.lines = new THREE.LineSegments(lines, linesMaterial);
+        // this.lines.position.z = z_offset;
+
+        // make the lines with Line2
+        const lineGeometry = new LineGeometry();
+        lineGeometry.setPositions([...this.vertices, this.vertices[0]].map((v) => [v.x, v.y, z_offset]).flat());
+        const lineMaterial = new LineMaterial({ color: edge_color, linewidth: 2, clippingPlanes: clipping_planes });
+        lineMaterial.resolution.set(window.innerWidth, window.innerHeight);
+        this.lines = new Line2(lineGeometry, lineMaterial);
+    }
+
+    add_to_scene(scene: THREE.Scene) {
+        scene.add(this.mesh);
+        scene.add(this.lines);
+    }
+}
+
+type EdgeProps = {
+    p0: [number, number];
+    p1: [number, number];
+    thickness: number;
+    z_offset: number;
+    color: THREE.ColorRepresentation;
+    edge_color: THREE.ColorRepresentation;
+    clipping_planes: THREE.Plane[];
+};
+class Edge {
+    mesh: THREE.Mesh;
+    lines: Line2; //THREE.LineSegments;
+
+    constructor({ p0, p1, thickness, z_offset, color, edge_color, clipping_planes }: EdgeProps) {
+        // directly build the geometry in 3D with a BufferGeometry
+        const geometry = new THREE.BufferGeometry();
+        // prettier-ignore
+        const vertices = new Float32Array([
+            p0[0], p0[1], z_offset + thickness,
+            p0[0], p0[1], z_offset,
+            p1[0], p1[1], z_offset,
+            p1[0], p1[1], z_offset + thickness
+        ]);
+        geometry.setIndex([0, 1, 2, 2, 3, 0]);
+        geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+        const material = new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, clippingPlanes: clipping_planes });
+        this.mesh = new THREE.Mesh(geometry, material);
+
+        // // make the lines
+        // const lines = new THREE.EdgesGeometry(geometry);
+        // const linesMaterial = new THREE.LineBasicMaterial({ color: edge_color });
+        // this.lines = new THREE.LineSegments(lines, linesMaterial);
+
+        // make the lines with Line2
+        const lineGeometry = new LineGeometry();
+        lineGeometry.setPositions([...vertices, ...vertices.slice(0, 3)]);
+        const lineMaterial = new LineMaterial({ color: edge_color, linewidth: 2, clippingPlanes: clipping_planes });
+        lineMaterial.resolution.set(window.innerWidth, window.innerHeight);
+        this.lines = new Line2(lineGeometry, lineMaterial);
+    }
+
+    add_to_scene(scene: THREE.Scene) {
+        scene.add(this.mesh);
+        scene.add(this.lines);
+    }
+}
