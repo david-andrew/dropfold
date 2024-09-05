@@ -139,6 +139,8 @@ class BuildThingScene {
 
     // fold tracking parameters
     fold_facet_idx: number = -1; // The index of the initially touched facet at the start of a fold
+    fold_edge_idx: number = -1; // The index of the edge that the fold starts from
+    fold_sign: -1 | 1 | null = null; // Whether the fold is in the positive direction or negative direction
     from_point = new THREE.Vector3(); // The point on the facet that the fold starts from
     mid_point = new THREE.Vector3(); // The halfway point between the fold start and current pointer location
     to_point = new THREE.Vector3(); // The current pointer location (start point should move to this point to accomplish the fold)
@@ -192,8 +194,6 @@ class BuildThingScene {
         this.hide_debug_geometry = hide_debug_geometry;
         this.show_debug_geometry = show_debug_geometry;
 
-        // DEBUG set up meshes based on paper_plane_states (todo move this process into a method)
-        // example of a plane layer
         // set dummy values for prime_group and copy_group
         this.rebuild_thing(this.thing_t);
 
@@ -287,8 +287,18 @@ class BuildThingScene {
     };
 
     // only call on initial press
-    update_closest_edge = (facet_idx: number) => {
-        const facet = this.facets[facet_idx];
+    determine_fold_sign = () => {
+        // determine the fold direction based on the touch normal
+        const facet = this.facets[this.fold_facet_idx];
+        const world_transform = facet.mesh.matrixWorld;
+        const facet_z = new THREE.Vector3(0, 0, 1).applyMatrix4(world_transform);
+        const fold_normal_dot = facet_z.dot(this.controls.touchNormal);
+        this.fold_sign = fold_normal_dot > 0 ? 1 : -1;
+    };
+
+    // only call on initial press
+    determine_fold_from_point = () => {
+        const facet = this.facets[this.fold_facet_idx];
 
         // Transform the 2D shape points to 3D
         const worldVertices: THREE.Vector3[] = [];
@@ -302,6 +312,7 @@ class BuildThingScene {
         let bestPoint = worldVertices[0];
         const worldIntersect = this.controls.touchPoint; //intersect_point.clone().applyMatrix4(shape.prism.matrixWorld)
         let bestDistance = bestPoint.distanceTo(worldIntersect);
+        let bestEdgeIdx = 0;
         for (let i = 1; i < worldVertices.length + 1; i++) {
             const V = worldVertices[i % worldVertices.length].clone().sub(worldVertices[i - 1]);
             const W = worldIntersect.clone().sub(worldVertices[i - 1]);
@@ -313,8 +324,13 @@ class BuildThingScene {
             if (distance < bestDistance) {
                 bestDistance = distance;
                 bestPoint = closest;
+                bestEdgeIdx = i - 1;
             }
         }
+
+        //TODO: potentially travel along folds to lower layers
+        // update bestEdgeIdx, fold-in-vs-out, fold_facet_idx,
+
         this.from_point.copy(bestPoint);
     };
 
@@ -371,18 +387,26 @@ class BuildThingScene {
         // if the fold line is too short (or out of bounds), don't draw the active edge
         if (this.p0.clone().sub(this.p1).lengthSq() < 0.001) return;
 
-        // determine if the active edge should be positive direction or negative direction
-        const front_side = new THREE.Vector3(0,0,1).dot(this.controls.touchNormal) > 0
+        // transform the fold endpoints from world space to the facet's local space
+        const facet_tf = this.facets[this.fold_facet_idx].mesh.matrixWorld;
+        const inv_tf = facet_tf.clone().invert();
+        const local_p0 = this.p0.clone().applyMatrix4(inv_tf);
+        const local_p1 = this.p1.clone().applyMatrix4(inv_tf);
 
         this.active_edge = new Edge({
-            p1: [this.p0.x, this.p0.y],
-            p0: [this.p1.x, this.p1.y],
-            thickness: (front_side ? 1 : -1) * this.layer_thickness * 2, //TODO: this should be the thickness of the fold, not hardcoded to 2
+            p1: [local_p0.x, local_p0.y],
+            p0: [local_p1.x, local_p1.y],
+            thickness: this.fold_sign * this.layer_thickness * this.determine_fold_height(),
             z_offset: 0,
             color: this.face_color,
             edge_color: this.edge_color,
             clipping_planes: []
         });
+
+        // transform the active edge back to world space
+        this.active_edge.mesh.applyMatrix4(facet_tf);
+        this.active_edge.lines.applyMatrix4(facet_tf);
+
         this.active_edge.add_to_scene(this.scene);
     };
 
@@ -436,9 +460,6 @@ class BuildThingScene {
             console.error('More than 2 intersections found');
         }
 
-        // determine if camera is on +z or -z side. So that we can make the fold towards the camera
-        // const front_side = new THREE.Vector3(0,0,1).dot(this.controls.touchNormal) > 0
-
         // convert intersections to world space
         const [local_p0, local_p1] = intersections;
         this.p0 = new THREE.Vector3(local_p0.x, local_p0.y, 0);
@@ -447,19 +468,26 @@ class BuildThingScene {
         this.p1.applyMatrix4(facet.mesh.matrixWorld);
     };
 
-    on_press = () => {
-        // DEBUG
-        this.on_release();
+    determine_fold_height = (): number => {
+        const facet = this.facets[this.fold_facet_idx];
+        //TODO
+        return 2;
+    };
 
-        this.fold_facet_idx = this.mesh_to_facet_idx.get(this.controls.touchMesh);
-        this.update_closest_edge(this.fold_facet_idx);
-        this.to_point.copy(this.controls.touchPoint);
-        this.update_midpoint();
-        // this.fold_normal.copy(this.controls.touchNormal);
+    on_press = () => {
+        // DEBUG. remove when we have proper handling of apply_fold()
+        this.on_release();
 
         // show the copy_group
         this.copy_group.visible = true;
-        this.transform_copy_group();
+
+        //determine the facet that is the root of the fold
+        this.fold_facet_idx = this.mesh_to_facet_idx.get(this.controls.touchMesh);
+        this.determine_fold_sign();
+        this.determine_fold_from_point();
+
+        // update geometry based on the current state of the fold
+        this.on_move();
     };
 
     on_move = () => {
@@ -470,6 +498,8 @@ class BuildThingScene {
 
     on_release = () => {
         this.fold_facet_idx = -1;
+        this.fold_edge_idx = -1;
+        this.fold_sign = null;
         this.copy_group.visible = false;
         this.disable_clipping_planes();
 
@@ -494,21 +524,24 @@ class BuildThingScene {
     };
 }
 
-
-export const build_thing_scene = (thing_t: ThingTemplate) => (renderer: THREE.WebGLRenderer): SceneFunctions => {
-    const scene = new BuildThingScene({ thing_t, renderer });
-    return {
-        update_scene: scene.update_scene,
-        camera: scene.camera,
-        resetter: scene.resetter
+export const build_thing_scene =
+    (thing_t: ThingTemplate) =>
+    (renderer: THREE.WebGLRenderer): SceneFunctions => {
+        const scene = new BuildThingScene({ thing_t, renderer });
+        return {
+            update_scene: scene.update_scene,
+            camera: scene.camera,
+            resetter: scene.resetter
+        };
     };
-}
 
-export const build_thing_from_seed = (verts: [number, number][]) => (renderer: THREE.WebGLRenderer): SceneFunctions => {
-    const thing_t: ThingTemplate = [[{ vertices: verts, links: verts.map(_ => null) }]];
-    return build_thing_scene(thing_t)(renderer);
-}
+export const build_thing_from_seed =
+    (verts: [number, number][]) =>
+    (renderer: THREE.WebGLRenderer): SceneFunctions => {
+        const thing_t: ThingTemplate = [[{ vertices: verts, links: verts.map((_) => null) }]];
+        return build_thing_scene(thing_t)(renderer);
+    };
 
 export const paper_plane_scene = (renderer: THREE.WebGLRenderer): SceneFunctions => {
     return build_thing_scene(paper_plane_states[2])(renderer);
-}
+};
