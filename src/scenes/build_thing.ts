@@ -64,6 +64,8 @@ class BuildThingScene {
     facets: Facet[];
     edges: Edge[];
     mesh_to_facet_idx: Map<THREE.Mesh, number>;
+    facet_idx_to_template_coords: Map<number, [number, number]>;
+    template_coords_to_facet_idx: Map<[number, number], number>;
     prime_group: THREE.Group;
     copy_group: THREE.Group;
     active_edge: Edge | null = null; // so we can draw the edge currently being folded
@@ -148,10 +150,11 @@ class BuildThingScene {
 
     construct_thing = (thing_t: ThingTemplate, clipping_planes: THREE.Plane[], is_prime: boolean): THREE.Group => {
         const group = new THREE.Group();
-        const facets = [];
-        const edges = [];
+        const facets: Facet[] = [];
+        const edges: Edge[] = [];
+        const coords: [number, number][] = [];
         thing_t.forEach((layer, i) =>
-            layer.forEach((facet_t) => {
+            layer.forEach((facet_t, j) => {
                 const f = new Facet({
                     vertices: facet_t.vertices,
                     z_offset: i * this.layer_thickness,
@@ -160,6 +163,7 @@ class BuildThingScene {
                     clipping_planes
                 });
                 facets.push(f);
+                coords.push([i, j]);
                 group.add(f.mesh);
                 group.add(f.lines);
 
@@ -190,8 +194,12 @@ class BuildThingScene {
             this.facets = facets;
             this.edges = edges;
             this.mesh_to_facet_idx = new Map<THREE.Mesh, number>();
+            this.facet_idx_to_template_coords = new Map<number, [number, number]>();
+            this.template_coords_to_facet_idx = new Map<[number, number], number>();
             facets.forEach((f, i) => {
                 this.mesh_to_facet_idx.set(f.mesh, i);
+                this.facet_idx_to_template_coords.set(i, coords[i]);
+                this.template_coords_to_facet_idx.set(coords[i], i);
             });
         }
 
@@ -259,10 +267,14 @@ class BuildThingScene {
             }
         }
 
-        //TODO: potentially travel along folds to lower layers
-        // update bestEdgeIdx, fold-in-vs-out, fold_facet_idx,
-
+        // save the fold start point and edge index
         this.from_point.copy(bestPoint);
+        this.fold_edge_idx = bestEdgeIdx;
+    };
+
+    determine_lowest_facet = () => {
+        // after the initial facet/edge were determined, walk down the chain of linked facets to find the lowest one
+        console.log('determining lowest facet...');
     };
 
     update_midpoint = () => {
@@ -401,7 +413,7 @@ class BuildThingScene {
 
     determine_fold_height = (): number => {
         const facet = this.facets[this.fold_facet_idx];
-        //TODO
+        //TODO: get the layer index of the facet, and then count how many layers to the end (or start if negative fold)
         return 2;
     };
 
@@ -416,6 +428,7 @@ class BuildThingScene {
         this.fold_facet_idx = this.mesh_to_facet_idx.get(this.controls.touchMesh);
         this.determine_fold_sign();
         this.determine_fold_from_point();
+        this.determine_lowest_facet();
 
         // update geometry based on the current state of the fold
         this.on_move();
@@ -451,7 +464,7 @@ class BuildThingScene {
     };
 
     resetter = () => {
-        // todo
+        this.controls.dispose();
     };
 }
 
