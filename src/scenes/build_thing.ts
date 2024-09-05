@@ -4,7 +4,7 @@ import { clamp } from 'three/src/math/MathUtils.js';
 import { SceneFunctions } from '../main';
 import { states as paper_plane_states, ThingTemplate } from './test_paper_plane';
 import { OrbitalPointer } from '../controls';
-import { setup_debug_geometry, getLineIntersection } from '../utils';
+import { setup_debug_geometry, hash_coord, getLineIntersection } from '../utils';
 
 import { Line2 } from 'three/examples/jsm/lines/Line2.js';
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
@@ -29,7 +29,7 @@ export const build_thing_from_seed =
     };
 
 export const paper_plane_scene = (renderer: THREE.WebGLRenderer): SceneFunctions => {
-    return build_thing_scene(paper_plane_states[2])(renderer);
+    return build_thing_scene(paper_plane_states[3])(renderer);
 };
 
 type BuildThingSceneProps = {
@@ -65,7 +65,7 @@ class BuildThingScene {
     edges: Edge[];
     mesh_to_facet_idx: Map<THREE.Mesh, number>;
     facet_idx_to_template_coords: Map<number, [number, number]>;
-    template_coords_to_facet_idx: Map<[number, number], number>;
+    template_coords_to_facet_idx: Map<string, number>; // string is the representation of the coordinates so we can use it as a key
     prime_group: THREE.Group;
     copy_group: THREE.Group;
     active_edge: Edge | null = null; // so we can draw the edge currently being folded
@@ -195,11 +195,11 @@ class BuildThingScene {
             this.edges = edges;
             this.mesh_to_facet_idx = new Map<THREE.Mesh, number>();
             this.facet_idx_to_template_coords = new Map<number, [number, number]>();
-            this.template_coords_to_facet_idx = new Map<[number, number], number>();
+            this.template_coords_to_facet_idx = new Map<string, number>();
             facets.forEach((f, i) => {
                 this.mesh_to_facet_idx.set(f.mesh, i);
                 this.facet_idx_to_template_coords.set(i, coords[i]);
-                this.template_coords_to_facet_idx.set(coords[i], i);
+                this.template_coords_to_facet_idx.set(hash_coord(coords[i]), i);
             });
         }
 
@@ -274,7 +274,21 @@ class BuildThingScene {
 
     determine_lowest_facet = () => {
         // after the initial facet/edge were determined, walk down the chain of linked facets to find the lowest one
-        console.log('determining lowest facet...');
+        let current_facet_idx = this.fold_facet_idx;
+        let current_edge_idx = this.fold_edge_idx;
+        const [i, j] = this.facet_idx_to_template_coords.get(current_facet_idx);
+        if (this.thing_t[i][j].links[current_edge_idx] === null) return;
+
+        const [layer_offset, k] = this.thing_t[i][j].links[current_edge_idx];
+        if (layer_offset > 0) return; // only walk down the chain if the link is negative. TODO: this heuristic is probably wrong... need something more like keeping track of which facets are parents vs children
+
+        current_facet_idx = this.template_coords_to_facet_idx.get(hash_coord([i + layer_offset, k]))!;
+        current_edge_idx = this.thing_t[i + layer_offset][k].links.reduce(
+            (acc, link, idx) => (link && link[0] === -layer_offset && link[1] === j ? idx : acc),
+            -1
+        );
+        this.fold_facet_idx = current_facet_idx;
+        this.fold_edge_idx = current_edge_idx;
     };
 
     update_midpoint = () => {
@@ -299,7 +313,9 @@ class BuildThingScene {
         this.copy_group.position.add(this.mid_point);
 
         // TOOD: this should shift the number of layers of the fold. Currently, it just shifts by 2 layers
-        this.copy_group.position.add(this.controls.touchNormal.clone().multiplyScalar(this.layer_thickness * 2));
+        this.copy_group.position.add(
+            this.controls.touchNormal.clone().multiplyScalar(this.layer_thickness * this.determine_fold_height())
+        );
 
         this.update_clipping_planes();
         this.update_active_edge();
@@ -412,9 +428,18 @@ class BuildThingScene {
     };
 
     determine_fold_height = (): number => {
-        const facet = this.facets[this.fold_facet_idx];
-        //TODO: get the layer index of the facet, and then count how many layers to the end (or start if negative fold)
-        return 2;
+        // const facet = this.facets[this.fold_facet_idx];
+        const [i, j] = this.facet_idx_to_template_coords.get(this.fold_facet_idx);
+        if (this.fold_sign === null) {
+            console.error('fold sign not determined');
+            return 0;
+        } else if (this.fold_sign === 1) {
+            return this.thing_t.length - i;
+        } else {
+            return i + 1;
+        }
+        // //TODO: get the layer index of the facet, and then count how many layers to the end (or start if negative fold)
+        // return 2;
     };
 
     on_press = () => {

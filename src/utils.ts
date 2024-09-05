@@ -38,6 +38,9 @@ export const getLineIntersection = (segment: Line, line: Line): THREE.Vector2 | 
     return null; // No intersection within the segment
 };
 
+type Coord = [number, number];
+export const hash_coord = (coord: Coord) => `${coord[0]}_${coord[1]}`;
+
 export const setup_debug_geometry = (scene: THREE.Scene, debug: boolean) => {
     if (!debug) {
         return { hide_debug_geometry: () => {}, show_debug_geometry: () => {} };

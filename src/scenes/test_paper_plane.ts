@@ -93,7 +93,7 @@ export const states: ThingTemplate[] = [
         [
             {
                 vertices: [[-4.25, 1.25], [4.25, 1.25], [0, -3]],
-                links: [null, null, null]
+                links: [[-2, 0], null, null]
             }
         ]
     ]
