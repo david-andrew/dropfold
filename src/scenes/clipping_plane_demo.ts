@@ -45,6 +45,7 @@ export const clipping_plane_demo = (renderer: THREE.WebGLRenderer): SceneFunctio
         localPlane = undefined;
         stats = undefined;
         gui = undefined;
+        window.removeEventListener( 'resize', onWindowResize );
     }
 
     return { update_scene, resetter, camera }

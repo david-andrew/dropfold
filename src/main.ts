@@ -71,7 +71,7 @@ const scene_selector_main = () => {
         build_thing_from_seed([[0, 3], [-8.66, -5], [4.22, -5]]),
         build_thing_from_seed([[0, 10], [10, 5], [5, -10], [0,-10], [-10, 0], [-5, 10]]),
         test_touch_controls_scene,
-        clipping_plane_demo,
+        // clipping_plane_demo,
         business_card, 
         paper_plane_scene,   
     ]
