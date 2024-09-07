@@ -4,7 +4,7 @@ import { clamp } from 'three/src/math/MathUtils.js';
 import { SceneFunctions } from '../main';
 import { states as paper_plane_states, ThingTemplate } from './test_paper_plane';
 import { OrbitalPointer } from '../controls';
-import { setup_debug_geometry, hash_coord, getLineIntersection } from '../utils';
+import { setup_debug_geometry, hash_coord, getLineIntersection, getLineCircleIntersections } from '../utils';
 
 import { Line2 } from 'three/examples/jsm/lines/Line2.js';
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
@@ -292,6 +292,43 @@ class BuildThingScene {
     };
 
     update_midpoint = () => {
+        // update the midpoint based on the from_point and to_point
+        this.mid_point.copy(this.from_point).lerp(this.to_point, 0.5);
+
+        // iterate over all vertices of the facet to check if the to_point is within any of their workspaces
+        // convert from_point and to_point to the local space of the facet
+        const facet = this.facets[this.fold_facet_idx];
+        const inv_tf = facet.mesh.matrixWorld.clone().invert();
+        let temp: THREE.Vector3;
+        temp = this.from_point.clone().applyMatrix4(inv_tf);
+        const local_from_point = new THREE.Vector2(temp.x, temp.y);
+        temp = this.to_point.clone().applyMatrix4(inv_tf);
+        const local_to_point = new THREE.Vector2(temp.x, temp.y);
+
+        let best_shift = Infinity;
+        let best_point: THREE.Vector2 = facet.vertices[0];
+        for (let vertex of facet.vertices) {
+            const workspace_radius = vertex.distanceTo(local_from_point);
+            const distance_from_vertex = local_to_point.distanceTo(vertex);
+            if (distance_from_vertex < workspace_radius) {
+                //the point is within a workspace
+                return;
+            }
+            const intersections = getLineCircleIntersections(local_from_point, local_to_point, vertex, workspace_radius);
+            if (intersections.length === 0) {
+                continue;
+            }
+            for (let intersection of intersections) {
+                const shift = intersection.distanceTo(local_to_point);
+                if (shift < best_shift) {
+                    best_shift = shift;
+                    best_point = intersection;
+                }
+            }
+        }
+
+        temp = new THREE.Vector3(best_point.x, best_point.y, 0);
+        this.to_point.copy(temp.applyMatrix4(facet.mesh.matrixWorld));
         this.mid_point.copy(this.from_point).lerp(this.to_point, 0.5);
     };
 

@@ -38,6 +38,50 @@ export const getLineIntersection = (segment: Line, line: Line): THREE.Vector2 | 
     return null; // No intersection within the segment
 };
 
+export const getLineCircleIntersections = (P1: THREE.Vector2, P2: THREE.Vector2, C: THREE.Vector2, r: number) => {
+    // Direction vector of the line
+    const d = new THREE.Vector2().subVectors(P2, P1); // d = P2 - P1
+
+    // Vector from circle center to first point of the line
+    const f = new THREE.Vector2().subVectors(P1, C); // f = P1 - C
+
+    // Quadratic coefficients
+    const a = d.dot(d); // a = d • d
+    const b = 2 * f.dot(d); // b = 2 * f • d
+    const c = f.dot(f) - r * r; // c = f • f - r^2
+
+    // Solving the discriminant
+    const discriminant = b * b - 4 * a * c;
+
+    // No intersection if discriminant is negative
+    if (discriminant < 0) {
+        return []; // No intersection
+    }
+
+    // If discriminant is zero or positive, there are one or two intersections
+    const sqrtDiscriminant = Math.sqrt(discriminant);
+
+    // Two possible values for t
+    const t1 = (-b - sqrtDiscriminant) / (2 * a);
+    const t2 = (-b + sqrtDiscriminant) / (2 * a);
+
+    const intersections = [];
+
+    // If t1 is between 0 and 1, it means the intersection point is on the line segment
+    if (t1 >= 0 && t1 <= 1) {
+        const intersection1 = new THREE.Vector2().addVectors(P1, d.clone().multiplyScalar(t1));
+        intersections.push(intersection1);
+    }
+
+    // If t2 is between 0 and 1, it means the intersection point is on the line segment
+    if (t2 >= 0 && t2 <= 1) {
+        const intersection2 = new THREE.Vector2().addVectors(P1, d.clone().multiplyScalar(t2));
+        intersections.push(intersection2);
+    }
+
+    return intersections; // Returns an array with 0, 1, or 2 intersection points
+};
+
 type Coord = [number, number];
 export const hash_coord = (coord: Coord) => `${coord[0]}_${coord[1]}`;
 
