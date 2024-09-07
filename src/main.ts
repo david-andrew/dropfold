@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+(window as any).THREE = THREE;
 // import {general_folding_scene} from './scenes/paper_folding';
 // import { general_folding_scene } from './scenes/paper_folding_2';
 import { general_folding_scene } from './scenes/paper_folding_3';
@@ -7,6 +8,7 @@ import { test_touch_controls_scene } from './scenes/touch_controls_testing';
 import { clipping_plane_demo } from './scenes/clipping_plane_demo';
 import { business_card } from './scenes/business_card';
 import { build_thing_scene, build_thing_from_seed, paper_plane_scene } from './scenes/build_thing';
+import { msdf_test } from './scenes/msdf-test';
 
 type SceneKey = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '0';
 const DEFAULT_SCENE_KEY: SceneKey = '1';
@@ -72,6 +74,7 @@ const scene_selector_main = () => {
         build_thing_from_seed([[0, 10], [10, 5], [5, -10], [0,-10], [-10, 0], [-5, 10]]),
         test_touch_controls_scene,
         // clipping_plane_demo,
+        msdf_test,
         business_card, 
         paper_plane_scene,   
     ]
