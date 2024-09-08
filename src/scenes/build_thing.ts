@@ -61,14 +61,18 @@ class BuildThingScene {
     prime_clip_planes: THREE.Plane[] = [];
     copy_clip_planes: THREE.Plane[] = [];
 
-    // objects
+    // template of the current thing
     thing_t: ThingTemplate;
-    facets: Facet[];
-    edges: Edge[];
-    mesh_to_facet_idx: Map<THREE.Mesh, number>;
     facet_idx_to_template_coords: Map<number, [number, number]>;
     template_coords_to_facet_idx: Map<string, number>; // string is the representation of the coordinates so we can use it as a key
+
+    // objects
+    prime_mesh_to_facet_idx: Map<THREE.Mesh, number>; // used to link based on which object the orbital pointer touches
+    prime_facets: Facet[];
+    prime_edges: Edge[];
     prime_group: THREE.Group;
+    copy_facets: Facet[];
+    copy_edges: Edge[];
     copy_group: THREE.Group;
     active_edge: Edge | null = null; // so we can draw the edge currently being folded
 
@@ -143,7 +147,7 @@ class BuildThingScene {
             camera: this.camera,
             scene: this.scene,
             domElement: this.renderer.domElement,
-            getInteractables: () => this.facets.map((f) => f.mesh),
+            getInteractables: () => this.prime_facets.map((f) => f.mesh),
             onPress: this.on_press,
             onMove: this.on_move,
             // onRelease: this.on_release, //TODO: uncomment this when we have proper handling of apply_fold()
@@ -195,16 +199,19 @@ class BuildThingScene {
 
         // for the prime version, save its facets and edges to the class
         if (is_prime) {
-            this.facets = facets;
-            this.edges = edges;
-            this.mesh_to_facet_idx = new Map<THREE.Mesh, number>();
+            this.prime_facets = facets;
+            this.prime_edges = edges;
+            this.prime_mesh_to_facet_idx = new Map<THREE.Mesh, number>();
             this.facet_idx_to_template_coords = new Map<number, [number, number]>();
             this.template_coords_to_facet_idx = new Map<string, number>();
             facets.forEach((f, i) => {
-                this.mesh_to_facet_idx.set(f.mesh, i);
+                this.prime_mesh_to_facet_idx.set(f.mesh, i);
                 this.facet_idx_to_template_coords.set(i, coords[i]);
                 this.template_coords_to_facet_idx.set(hash_coord(coords[i]), i);
             });
+        } else {
+            this.copy_facets = facets;
+            this.copy_edges = edges;
         }
 
         return group;
@@ -232,7 +239,7 @@ class BuildThingScene {
     // only call on initial press
     determine_fold_sign = () => {
         // determine the fold direction based on the touch normal
-        const facet = this.facets[this.fold_facet_idx];
+        const facet = this.prime_facets[this.fold_facet_idx];
         const world_transform = facet.mesh.matrixWorld;
         const facet_z = new THREE.Vector3(0, 0, 1).applyMatrix4(world_transform);
         const fold_normal_dot = facet_z.dot(this.controls.touchNormal);
@@ -241,7 +248,7 @@ class BuildThingScene {
 
     // only call on initial press
     determine_fold_from_point = () => {
-        const facet = this.facets[this.fold_facet_idx];
+        const facet = this.prime_facets[this.fold_facet_idx];
 
         // Transform the 2D shape points to 3D
         const worldVertices: THREE.Vector3[] = [];
@@ -301,7 +308,7 @@ class BuildThingScene {
 
         // iterate over all vertices of the facet to check if the to_point is within any of their workspaces
         // convert from_point and to_point to the local space of the facet
-        const facet = this.facets[this.fold_facet_idx];
+        const facet = this.prime_facets[this.fold_facet_idx];
         const inv_tf = facet.mesh.matrixWorld.clone().invert();
         let temp: THREE.Vector3;
         temp = this.from_point.clone().applyMatrix4(inv_tf);
@@ -425,7 +432,7 @@ class BuildThingScene {
         if (this.p0.clone().sub(this.p1).lengthSq() < 0.001) return;
 
         // transform the fold endpoints from world space to the facet's local space
-        const facet_tf = this.facets[this.fold_facet_idx].mesh.matrixWorld;
+        const facet_tf = this.prime_facets[this.fold_facet_idx].mesh.matrixWorld;
         const inv_tf = facet_tf.clone().invert();
         const local_p0 = this.p0.clone().applyMatrix4(inv_tf);
         const local_p1 = this.p1.clone().applyMatrix4(inv_tf);
@@ -460,7 +467,7 @@ class BuildThingScene {
         //compute p0 and p1 based on the from_point, mid_point, and to_point, and the mesh being folded
 
         // Transform the 2D shape points to 3D
-        const facet = this.facets[this.fold_facet_idx];
+        const facet = this.prime_facets[this.fold_facet_idx];
         const shapeVertices = facet.vertices.map((v) => new THREE.Vector2(v.x, v.y));
 
         // convert the direction to 2D by projecting the line into the mesh's frame
@@ -528,7 +535,7 @@ class BuildThingScene {
         this.copy_group.visible = true;
 
         //determine the facet that is the root of the fold
-        this.fold_facet_idx = this.mesh_to_facet_idx.get(this.controls.touchMesh);
+        this.fold_facet_idx = this.prime_mesh_to_facet_idx.get(this.controls.touchMesh);
         this.determine_fold_sign();
         this.determine_fold_from_point();
         this.determine_lowest_facet();
