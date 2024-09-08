@@ -40,6 +40,7 @@ type BuildThingSceneProps = {
     edge_color?: THREE.ColorRepresentation;
     face_color?: THREE.ColorRepresentation;
     debug_geometry?: boolean;
+    shrink_workspaces?: boolean;
 };
 class BuildThingScene {
     // initialization
@@ -48,6 +49,7 @@ class BuildThingScene {
     edge_color: THREE.ColorRepresentation;
     face_color: THREE.ColorRepresentation;
     debug_geometry: boolean;
+    shrink_workspaces: boolean;
 
     // rendering/simulation
     scene: THREE.Scene;
@@ -97,7 +99,8 @@ class BuildThingScene {
         background_color = 0, //0x222222,
         edge_color = 0xffffff, //0x000000,
         face_color = 0, //0xffffff,
-        debug_geometry = false
+        debug_geometry = false,
+        shrink_workspaces = false
     }: BuildThingSceneProps) {
         this.thing_t = thing_t;
 
@@ -107,6 +110,7 @@ class BuildThingScene {
         this.edge_color = edge_color;
         this.face_color = face_color;
         this.debug_geometry = debug_geometry;
+        this.shrink_workspaces = shrink_workspaces;
 
         // setup the scene
         this.renderer = renderer;
@@ -301,18 +305,33 @@ class BuildThingScene {
         const inv_tf = facet.mesh.matrixWorld.clone().invert();
         let temp: THREE.Vector3;
         temp = this.from_point.clone().applyMatrix4(inv_tf);
-        let local_from_point = new THREE.Vector2(temp.x, temp.y);
+        const original_local_from_point = new THREE.Vector2(temp.x, temp.y);
         temp = this.to_point.clone().applyMatrix4(inv_tf);
         const local_to_point = new THREE.Vector2(temp.x, temp.y);
 
-        // shrink the vertices of the facet a smidge
-        const [vertices, [new_local_from_point]] = shrinkPolygon(facet.vertices, 0.95, [local_from_point]);
-        local_from_point = new_local_from_point;
+        let vertices: THREE.Vector2[];
+        let local_from_point: THREE.Vector2;
+        if (this.shrink_workspaces) {
+            // shrink the vertices of the facet a smidge
+            [vertices, [local_from_point]] = shrinkPolygon(facet.vertices, 0.95, [original_local_from_point]);
 
+            // insert an extra point into vertices to prevent the singularity around the from_point
+            // still not perfect, but works well enough for now. Intersections between the workspaces of the two vertices on the active edge and this workspace is too sharp
+            // To fix, consider using sdf with smooth combination of the workspaces (and maybe removing/adjusting this extra point)
+            vertices.push(local_from_point.clone().lerp(original_local_from_point, 2));
+        } else {
+            vertices = facet.vertices;
+            local_from_point = original_local_from_point;
+        }
+        // best point shifted directly along the drag direction
         let best_shift = Infinity;
         let best_point: THREE.Vector2 | null = null;
+
+        // backup if no best point is found. closest point in any valid workspace
         let okay_distance = Infinity;
         let okay_point: THREE.Vector2 | null = null;
+
+        // find the best point and okay point
         for (let vertex of vertices) {
             const workspace_radius = vertex.distanceTo(local_from_point);
             const distance_from_vertex = local_to_point.distanceTo(vertex);
@@ -351,6 +370,11 @@ class BuildThingScene {
 
     // transform the copy_group across the fold
     transform_copy_group = () => {
+        // if the distance between the from and too points is too small, don't fold
+        if (this.from_point.clone().sub(this.to_point).lengthSq() < 0.001) {
+            return;
+        }
+
         // get the unit vector from the from_point to the to_point and compute the axis to fold over
         const fold_dir = this.to_point.clone().sub(this.from_point).normalize();
         const fold_axis = new THREE.Vector3().crossVectors(fold_dir, this.controls.touchNormal).normalize();
