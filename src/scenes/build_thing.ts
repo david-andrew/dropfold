@@ -4,7 +4,7 @@ import { clamp } from 'three/src/math/MathUtils.js';
 import { SceneFunctions } from '../main';
 import { states as paper_plane_states, ThingTemplate } from './test_paper_plane';
 import { OrbitalPointer } from '../controls';
-import { setup_debug_geometry, hash_coord, getLineIntersection, getLineCircleIntersections } from '../utils';
+import { setup_debug_geometry, hash_coord, getLineIntersection, getLineCircleIntersections, shrinkPolygon } from '../utils';
 
 import { Line2 } from 'three/examples/jsm/lines/Line2.js';
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
@@ -301,19 +301,31 @@ class BuildThingScene {
         const inv_tf = facet.mesh.matrixWorld.clone().invert();
         let temp: THREE.Vector3;
         temp = this.from_point.clone().applyMatrix4(inv_tf);
-        const local_from_point = new THREE.Vector2(temp.x, temp.y);
+        let local_from_point = new THREE.Vector2(temp.x, temp.y);
         temp = this.to_point.clone().applyMatrix4(inv_tf);
         const local_to_point = new THREE.Vector2(temp.x, temp.y);
 
+        // shrink the vertices of the facet a smidge
+        const [vertices, [new_local_from_point]] = shrinkPolygon(facet.vertices, 0.95, [local_from_point]);
+        local_from_point = new_local_from_point;
+
         let best_shift = Infinity;
-        let best_point: THREE.Vector2 = facet.vertices[0];
-        for (let vertex of facet.vertices) {
+        let best_point: THREE.Vector2 | null = null;
+        let okay_distance = Infinity;
+        let okay_point: THREE.Vector2 | null = null;
+        for (let vertex of vertices) {
             const workspace_radius = vertex.distanceTo(local_from_point);
             const distance_from_vertex = local_to_point.distanceTo(vertex);
             if (distance_from_vertex < workspace_radius) {
-                //the point is within a workspace
+                //the point is already within a workspace, no need to adjust
                 return;
             }
+            // update the best okay point as the closest point in the workspace from the to_point
+            if (distance_from_vertex - workspace_radius < okay_distance) {
+                okay_distance = distance_from_vertex - workspace_radius;
+                okay_point = local_to_point.clone().sub(vertex).normalize().multiplyScalar(workspace_radius).add(vertex);
+            }
+
             const intersections = getLineCircleIntersections(local_from_point, local_to_point, vertex, workspace_radius);
             if (intersections.length === 0) {
                 continue;
@@ -325,6 +337,11 @@ class BuildThingScene {
                     best_point = intersection;
                 }
             }
+        }
+
+        // no intersections found
+        if (best_point === null) {
+            best_point = okay_point;
         }
 
         temp = new THREE.Vector3(best_point.x, best_point.y, 0);

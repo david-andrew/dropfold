@@ -38,7 +38,12 @@ export const getLineIntersection = (segment: Line, line: Line): THREE.Vector2 | 
     return null; // No intersection within the segment
 };
 
-export const getLineCircleIntersections = (P1: THREE.Vector2, P2: THREE.Vector2, C: THREE.Vector2, r: number) => {
+export const getLineCircleIntersections = (
+    P1: THREE.Vector2,
+    P2: THREE.Vector2,
+    C: THREE.Vector2,
+    r: number
+): THREE.Vector2[] => {
     // Direction vector of the line
     const d = new THREE.Vector2().subVectors(P2, P1); // d = P2 - P1
 
@@ -81,6 +86,57 @@ export const getLineCircleIntersections = (P1: THREE.Vector2, P2: THREE.Vector2,
 
     return intersections; // Returns an array with 0, 1, or 2 intersection points
 };
+
+/**
+ * Shrinks the vertices of a convex polygon by a given scale factor.
+ * @param vertices - Array of THREE.Vector2 representing the vertices of the polygon
+ * @param scaleFactor - The factor by which to shrink the polygon. A value between 0 and 1 shrinks the polygon, while > 1 would expand it.
+ * @returns A new array of THREE.Vector2 with the transformed vertices.
+ */
+function shrinkPolygon(vertices: THREE.Vector2[], scaleFactor: number): THREE.Vector2[];
+function shrinkPolygon(
+    vertices: THREE.Vector2[],
+    scaleFactor: number,
+    extra_points: THREE.Vector2[]
+): [THREE.Vector2[], THREE.Vector2[]];
+function shrinkPolygon(
+    vertices: THREE.Vector2[],
+    scaleFactor: number,
+    extra_points: THREE.Vector2[] = []
+): THREE.Vector2[] | [THREE.Vector2[], THREE.Vector2[]] {
+    // Calculate the centroid of the polygon
+    let centroid = new THREE.Vector2(0, 0);
+    vertices.forEach((vertex) => {
+        centroid.add(vertex);
+    });
+    centroid.divideScalar(vertices.length);
+
+    // Create a new array for the transformed vertices
+    const newVertices = vertices.map((vertex) => {
+        // Vector from centroid to the vertex
+        const direction = new THREE.Vector2().subVectors(vertex, centroid);
+        // Scale this vector by the scale factor
+        direction.multiplyScalar(scaleFactor);
+        // Create the new vertex by moving along this scaled vector
+        return new THREE.Vector2().addVectors(centroid, direction);
+    });
+
+    // Add the extra points
+    const newExtraPoints = extra_points.map((point) => {
+        // Vector from centroid to the vertex
+        const direction = new THREE.Vector2().subVectors(point, centroid);
+        // Scale this vector by the scale factor
+        direction.multiplyScalar(scaleFactor);
+        // Create the new vertex by moving along this scaled vector
+        return new THREE.Vector2().addVectors(centroid, direction);
+    });
+
+    if (extra_points.length === 0) {
+        return newVertices;
+    }
+    return [newVertices, newExtraPoints];
+}
+export { shrinkPolygon };
 
 type Coord = [number, number];
 export const hash_coord = (coord: Coord) => `${coord[0]}_${coord[1]}`;
