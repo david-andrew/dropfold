@@ -106,10 +106,15 @@ function shrinkPolygon(
 ): THREE.Vector2[] | [THREE.Vector2[], THREE.Vector2[]] {
     // Calculate the centroid of the polygon
     let centroid = new THREE.Vector2(0, 0);
-    vertices.forEach((vertex) => {
-        centroid.add(vertex);
-    });
-    centroid.divideScalar(vertices.length);
+    let area = 0;
+    for (let i = 0; i < vertices.length; i++) {
+        const next_i = (i + 1) % vertices.length;
+        const cross = cross2d(vertices[i], vertices[next_i]);
+        area += cross;
+        centroid.add(vertices[i].clone().add(vertices[next_i]).multiplyScalar(cross));
+    }
+    area /= 2;
+    centroid.divideScalar(6 * area);
 
     // Create a new array for the transformed vertices
     const newVertices = vertices.map((vertex) => {
