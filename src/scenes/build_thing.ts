@@ -29,7 +29,7 @@ export const build_thing_from_seed =
     };
 
 export const paper_plane_scene = (renderer: THREE.WebGLRenderer): SceneFunctions => {
-    return build_thing_scene(paper_plane_states[3])(renderer);
+    return build_thing_scene(paper_plane_states[2])(renderer);
 };
 
 type BuildThingSceneProps = {
@@ -77,8 +77,8 @@ class BuildThingScene {
     active_edge: Edge | null = null; // so we can draw the edge currently being folded
 
     // fold tracking parameters
-    fold_facet_idx: number = -1; // The index of the initially touched facet at the start of a fold
-    fold_edge_idx: number = -1; // The index of the edge that the fold starts from
+    fold_initial_facet_idx: number = -1; // The index of the initially touched facet at the start of a fold
+    fold_initial_edge_idx: number = -1; // The index of the edge that the fold starts from
     fold_sign: -1 | 1 | null = null; // Whether the fold is in the positive direction or negative direction
     from_point = new THREE.Vector3(); // The point on the facet that the fold starts from
     mid_point = new THREE.Vector3(); // The halfway point between the fold start and current pointer location
@@ -239,7 +239,7 @@ class BuildThingScene {
     // only call on initial press
     determine_fold_sign = () => {
         // determine the fold direction based on the touch normal
-        const facet = this.prime_facets[this.fold_facet_idx];
+        const facet = this.prime_facets[this.fold_initial_facet_idx];
         const world_transform = facet.mesh.matrixWorld;
         const facet_z = new THREE.Vector3(0, 0, 1).applyMatrix4(world_transform);
         const fold_normal_dot = facet_z.dot(this.controls.touchNormal);
@@ -248,7 +248,7 @@ class BuildThingScene {
 
     // only call on initial press
     determine_fold_from_point = () => {
-        const facet = this.prime_facets[this.fold_facet_idx];
+        const facet = this.prime_facets[this.fold_initial_facet_idx];
 
         // Transform the 2D shape points to 3D
         const worldVertices: THREE.Vector3[] = [];
@@ -280,35 +280,48 @@ class BuildThingScene {
 
         // save the fold start point and edge index
         this.from_point.copy(bestPoint);
-        this.fold_edge_idx = bestEdgeIdx;
+        this.fold_initial_edge_idx = bestEdgeIdx;
     };
 
-    determine_lowest_facet = () => {
+    determine_active_facet_layers = () => {
         // after the initial facet/edge were determined, walk down the chain of linked facets to find the lowest one
-        let current_facet_idx = this.fold_facet_idx;
-        let current_edge_idx = this.fold_edge_idx;
-        const [i, j] = this.facet_idx_to_template_coords.get(current_facet_idx);
-        if (this.thing_t[i][j].links[current_edge_idx] === null) return;
+        // let current_facet_idx = this.fold_facet_idx;
+        // let current_edge_idx = this.fold_edge_idx;
+        // const [i, j] = this.facet_idx_to_template_coords.get(current_facet_idx);
+        // if (this.thing_t[i][j].links[current_edge_idx] === null) return;
 
-        const [layer_offset, k] = this.thing_t[i][j].links[current_edge_idx];
-        if (layer_offset > 0) return; // only walk down the chain if the link is negative. TODO: this heuristic is probably wrong... need something more like keeping track of which facets are parents vs children
+        // const [layer_offset, k] = this.thing_t[i][j].links[current_edge_idx];
+        // if (layer_offset > 0) return; // only walk down the chain if the link is negative. TODO: this heuristic is probably wrong... need something more like keeping track of which facets are parents vs children
 
-        current_facet_idx = this.template_coords_to_facet_idx.get(hash_coord([i + layer_offset, k]))!;
-        current_edge_idx = this.thing_t[i + layer_offset][k].links.reduce(
-            (acc, link, idx) => (link && link[0] === -layer_offset && link[1] === j ? idx : acc),
-            -1
-        );
-        this.fold_facet_idx = current_facet_idx;
-        this.fold_edge_idx = current_edge_idx;
+        // current_facet_idx = this.template_coords_to_facet_idx.get(hash_coord([i + layer_offset, k]))!;
+        // current_edge_idx = this.thing_t[i + layer_offset][k].links.reduce(
+        //     (acc, link, idx) => (link && link[0] === -layer_offset && link[1] === j ? idx : acc),
+        //     -1
+        // );
+        // this.fold_facet_idx = current_facet_idx;
+        // this.fold_edge_idx = current_edge_idx;
+    };
+
+    /** */
+    hide_facets_below_active_layer = (facets: Facet[], edges: Edge[]) => {
+        // const facet = this.prime_facets[this.fold_facet_idx];
+        // this.fold_sign // direction to go in layers
+        // const [i, j] = this.facet_idx_to_template_coords.get(this.fold_initial_facet_idx);
+        // console.log('hide_facets_below_active_layer', i, j);
+        console.log('hide_facets_below_active_layer');
     };
 
     update_midpoint = () => {
         // update the midpoint based on the from_point and to_point
         this.mid_point.copy(this.from_point).lerp(this.to_point, 0.5);
+    }
+
+    fit_to_workspace_obstacles = () =>{
+        // TODO: update this so it uses all the facets in the active layers, not just the initial one
 
         // iterate over all vertices of the facet to check if the to_point is within any of their workspaces
         // convert from_point and to_point to the local space of the facet
-        const facet = this.prime_facets[this.fold_facet_idx];
+        const facet = this.prime_facets[this.fold_initial_facet_idx];
         const inv_tf = facet.mesh.matrixWorld.clone().invert();
         let temp: THREE.Vector3;
         temp = this.from_point.clone().applyMatrix4(inv_tf);
@@ -375,6 +388,12 @@ class BuildThingScene {
         this.mid_point.copy(this.from_point).lerp(this.to_point, 0.5);
     };
 
+    fit_to_edge_obstacles = () => {
+        //TODO
+    }
+
+
+
     // transform the copy_group across the fold
     transform_copy_group = () => {
         // if the distance between the from and too points is too small, don't fold
@@ -424,6 +443,8 @@ class BuildThingScene {
     };
 
     update_active_edge = () => {
+        //TODO: this needs to handle potentially complex edges with multiple segments based on all facets in the active layers
+
         // update the active edge to show the fold line
         this.delete_active_edge();
         this.compute_fold_endpoints();
@@ -432,7 +453,7 @@ class BuildThingScene {
         if (this.p0.clone().sub(this.p1).lengthSq() < 0.001) return;
 
         // transform the fold endpoints from world space to the facet's local space
-        const facet_tf = this.prime_facets[this.fold_facet_idx].mesh.matrixWorld;
+        const facet_tf = this.prime_facets[this.fold_initial_facet_idx].mesh.matrixWorld;
         const inv_tf = facet_tf.clone().invert();
         const local_p0 = this.p0.clone().applyMatrix4(inv_tf);
         const local_p1 = this.p1.clone().applyMatrix4(inv_tf);
@@ -464,10 +485,12 @@ class BuildThingScene {
 
     // should only call during fold
     compute_fold_endpoints = () => {
+        //TODO: this needs to handle potentially complex edges with multiple segments based on all facets in the active layers
+
         //compute p0 and p1 based on the from_point, mid_point, and to_point, and the mesh being folded
 
         // Transform the 2D shape points to 3D
-        const facet = this.prime_facets[this.fold_facet_idx];
+        const facet = this.prime_facets[this.fold_initial_facet_idx];
         const shapeVertices = facet.vertices.map((v) => new THREE.Vector2(v.x, v.y));
 
         // convert the direction to 2D by projecting the line into the mesh's frame
@@ -513,8 +536,7 @@ class BuildThingScene {
     };
 
     determine_fold_height = (): number => {
-        // const facet = this.facets[this.fold_facet_idx];
-        const [i, j] = this.facet_idx_to_template_coords.get(this.fold_facet_idx);
+        const [i, j] = this.facet_idx_to_template_coords.get(this.fold_initial_facet_idx);
         if (this.fold_sign === null) {
             console.error('fold sign not determined');
             return 0;
@@ -535,10 +557,11 @@ class BuildThingScene {
         this.copy_group.visible = true;
 
         //determine the facet that is the root of the fold
-        this.fold_facet_idx = this.prime_mesh_to_facet_idx.get(this.controls.touchMesh);
+        this.fold_initial_facet_idx = this.prime_mesh_to_facet_idx.get(this.controls.touchMesh);
         this.determine_fold_sign();
         this.determine_fold_from_point();
-        this.determine_lowest_facet();
+        this.determine_active_facet_layers();
+        this.hide_facets_below_active_layer(this.copy_facets, this.copy_edges);
 
         // update geometry based on the current state of the fold
         this.on_move();
@@ -551,8 +574,8 @@ class BuildThingScene {
     };
 
     on_release = () => {
-        this.fold_facet_idx = -1;
-        this.fold_edge_idx = -1;
+        this.fold_initial_facet_idx = -1;
+        this.fold_initial_edge_idx = -1;
         this.fold_sign = null;
         this.copy_group.visible = false;
         this.disable_clipping_planes();
