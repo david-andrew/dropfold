@@ -146,6 +146,13 @@ export { shrinkPolygon };
 type Coord = [number, number];
 export const hash_coord = (coord: Coord) => `${coord[0]}_${coord[1]}`;
 
+/**
+ * @param a a number
+ * @param b a number
+ * @returns `a % b`, ensuring the result is non-negative (python-style modulo)
+ */
+export const pmod = (a: number, b: number) => ((a % b) + b) % b; // Positive modulo
+
 export const setup_debug_geometry = (scene: THREE.Scene, debug: boolean) => {
     if (!debug) {
         return { hide_debug_geometry: () => {}, show_debug_geometry: () => {} };

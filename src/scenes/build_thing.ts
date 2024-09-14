@@ -4,7 +4,7 @@ import { clamp } from 'three/src/math/MathUtils.js';
 import { SceneFunctions } from '../main';
 import { states as paper_plane_states, ThingTemplate } from './test_paper_plane';
 import { OrbitalPointer } from '../controls';
-import { setup_debug_geometry, hash_coord, getLineIntersection, getLineCircleIntersections, shrinkPolygon } from '../utils';
+import { setup_debug_geometry, hash_coord, getLineIntersection, getLineCircleIntersections, shrinkPolygon, pmod } from '../utils';
 
 import { Line2 } from 'three/examples/jsm/lines/Line2.js';
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
@@ -29,7 +29,7 @@ export const build_thing_from_seed =
     };
 
 export const paper_plane_scene = (renderer: THREE.WebGLRenderer): SceneFunctions => {
-    return build_thing_scene(paper_plane_states[2])(renderer);
+    return build_thing_scene(paper_plane_states[3])(renderer);
 };
 
 type BuildThingSceneProps = {
@@ -80,6 +80,10 @@ class BuildThingScene {
     fold_initial_facet_idx: number = -1; // The index of the initially touched facet at the start of a fold
     fold_initial_edge_idx: number = -1; // The index of the edge that the fold starts from
     fold_sign: -1 | 1 | null = null; // Whether the fold is in the positive direction or negative direction
+    active_layers_near_idx: number = -1; // The index (inclusive) of the layer closest to the camera that is a part of the current fold process
+    active_layers_far_idx: number = -1; // The index (inclusive) of the layer farthest from the camera that is a part of the current fold process
+
+    // fold tracking geometry
     from_point = new THREE.Vector3(); // The point on the facet that the fold starts from
     mid_point = new THREE.Vector3(); // The halfway point between the fold start and current pointer location
     to_point = new THREE.Vector3(); // The current pointer location (start point should move to this point to accomplish the fold)
@@ -178,7 +182,7 @@ class BuildThingScene {
                 // handle any edge links
                 facet_t.links.forEach((link, j) => {
                     if (link === null) return;
-                    const [layer_offset, facet_index] = link;
+                    const [layer_offset, facet_index, edge_index] = link;
                     if (layer_offset < 0) return; // only handle positive direction links since there are 2 copies (one for positive, and one for negative)
 
                     const edge = new Edge({
@@ -284,22 +288,118 @@ class BuildThingScene {
     };
 
     determine_active_facet_layers = () => {
+        /**
+        Algorithm:
+        - start at the initial facet/edge
+        - if initial edge has no link, then done
+        - from initial edge, follow link. Any adjacent links on connection side should be explored
+            -> note that follow direction should be based on fold sign and offset sign
+        - repeat until no more adjacent links from followed links
+        
+        note that all of the this.facet_idx/etc. are based on the contiguous facet array, whereas the other indices correspond to the template structure
+        */
+
+        // TODO: this needs a better conception of which edges are obstacles, and which are picked up and included in the fold...
+        //       as is, we either grab too many layers (going through obstacles) or not enough (filtering out valid traversals)
+
+        const frontier: [number, number, number][] = []; // [layer_idx, facet_idx, edge_idx]
+        const visited_id = new Set<string>(); // to avoid cycles
+
         // after the initial facet/edge were determined, walk down the chain of linked facets to find the lowest one
-        // let current_facet_idx = this.fold_facet_idx;
-        // let current_edge_idx = this.fold_edge_idx;
-        // const [i, j] = this.facet_idx_to_template_coords.get(current_facet_idx);
-        // if (this.thing_t[i][j].links[current_edge_idx] === null) return;
+        const [init_layer_idx, init_facet_idx] = this.facet_idx_to_template_coords.get(this.fold_initial_facet_idx);
+        this.active_layers_near_idx = init_layer_idx;
+        this.active_layers_far_idx = init_layer_idx;
 
-        // const [layer_offset, k] = this.thing_t[i][j].links[current_edge_idx];
-        // if (layer_offset > 0) return; // only walk down the chain if the link is negative. TODO: this heuristic is probably wrong... need something more like keeping track of which facets are parents vs children
+        // seed the frontier with the initial edge and its adjacent edges
+        const links = this.thing_t[init_layer_idx][init_facet_idx].links;
+        if (links[this.fold_initial_edge_idx] !== null) {
+            frontier.push([init_layer_idx, init_facet_idx, this.fold_initial_edge_idx]);
+        }
 
-        // current_facet_idx = this.template_coords_to_facet_idx.get(hash_coord([i + layer_offset, k]))!;
-        // current_edge_idx = this.thing_t[i + layer_offset][k].links.reduce(
-        //     (acc, link, idx) => (link && link[0] === -layer_offset && link[1] === j ? idx : acc),
-        //     -1
-        // );
-        // this.fold_facet_idx = current_facet_idx;
-        // this.fold_edge_idx = current_edge_idx;
+        // only include adjacent edges from the initial link if they are going the same way as the fold
+        const left_edge_idx = pmod(this.fold_initial_edge_idx - 1, links.length);
+        if (links[left_edge_idx] !== null) { // && links[left_edge_idx][0] * this.fold_sign > 0) {
+            frontier.push([init_layer_idx, init_facet_idx, left_edge_idx]);
+        }
+        const right_edge_idx = pmod(this.fold_initial_edge_idx + 1, links.length);
+        if (links[right_edge_idx] !== null) { // && links[right_edge_idx][0] * this.fold_sign > 0) {
+            frontier.push([init_layer_idx, init_facet_idx, right_edge_idx]);
+        }
+
+        while (frontier.length > 0) {
+            const [layer_idx, facet_idx, edge_idx] = frontier.pop()!;
+
+
+            ///////////////// Validation checks ///////////////////////
+            // check if we've already visited this facet
+            const id = `${layer_idx}-${facet_idx}-${edge_idx}`;
+            console.log('visiting', id);
+            if (visited_id.has(id)) {
+                console.error(`Malformed thing template. Cycle detected at layer ${layer_idx}, facet ${facet_idx}, edge ${edge_idx}`);
+                continue;
+            }
+            visited_id.add(id);
+
+            // check if the layer index is valid
+            if (layer_idx < 0 || layer_idx >= this.thing_t.length) {
+                console.error(`Malformed thing template. Invalid layer index: ${layer_idx}`);
+                continue;
+            }
+            
+            // check that there is a non-null link at the provided coordinates
+            if (this.thing_t[layer_idx][facet_idx].links[edge_idx] === null) {
+                console.error(`Malformed thing template. No link found for layer ${layer_idx}, facet ${facet_idx}, edge ${edge_idx}`);
+                continue;
+            }
+            ///////////////////////////////////////////////////////////
+
+            // get the next set of coordinates from the current set
+            const [next_layer_offset, next_facet_idx, next_edge_idx] = this.thing_t[layer_idx][facet_idx].links[edge_idx];
+            const next_layer_idx = layer_idx + next_layer_offset;
+            const next_links = this.thing_t[next_layer_idx][next_facet_idx].links;
+
+            // verify that the next connection links back properly 
+            console.assert(next_links[next_edge_idx][0] === -next_layer_offset, 'Invalid link direction');
+            console.assert(next_links[next_edge_idx][1] === facet_idx, 'Invalid connected facet index');
+            console.assert(next_links[next_edge_idx][2] === edge_idx, 'Invalid connected edge index');
+            
+            // if the next layer is outside of the current bounds, expand the bounds
+            console.log('offset', next_layer_offset, 'fold_sign', this.fold_sign);
+            if (next_layer_offset * this.fold_sign > 0) {
+                // update the near index
+                if (this.fold_sign*(next_layer_idx) > this.fold_sign*(this.active_layers_near_idx)) {
+                    this.active_layers_near_idx = next_layer_idx;
+                }   
+            } else {
+                // update the far index
+                if (this.fold_sign*(next_layer_idx) < this.fold_sign*(this.active_layers_far_idx)) {
+                    this.active_layers_far_idx = next_layer_idx;
+                }
+            }
+
+            // add adjacent edges to the frontier (if they exist)
+            const left_edge_idx = pmod(next_edge_idx - 1, next_links.length);
+            if (next_links[left_edge_idx] !== null) {
+                frontier.push([next_layer_idx, next_facet_idx, left_edge_idx]);
+            }
+            const right_edge_idx = pmod(next_edge_idx + 1, next_links.length);
+            if (next_links[right_edge_idx] !== null) {
+                frontier.push([next_layer_idx, next_facet_idx, right_edge_idx]);
+            }
+
+            // // check the two adjacent edges to see if they should be 
+            // if (next_links[left_edge_idx] !== null) {
+            //     const [layer_offset, facet_idx, edge_idx] = next_links[left_edge_idx];
+            //     frontier.push([next_layer_idx + layer_offset, facet_idx, edge_idx]);
+            // }
+            // if (next_links[right_edge_idx] !== null) {
+            //     const [layer_offset, facet_idx, edge_idx] = next_links[right_edge_idx];
+            //     frontier.push([next_layer_idx + layer_offset, facet_idx, edge_idx]);
+            // }
+        }
+
+        console.log('active_layers_near_idx', this.active_layers_near_idx);
+        console.log('active_layers_far_idx', this.active_layers_far_idx);
     };
 
     /** */
@@ -562,6 +662,8 @@ class BuildThingScene {
         this.determine_fold_from_point();
         this.determine_active_facet_layers();
         this.hide_facets_below_active_layer(this.copy_facets, this.copy_edges);
+        //TODO: hide prime layers
+        //TODO: hide other copy layers
 
         // update geometry based on the current state of the fold
         this.on_move();
@@ -570,12 +672,16 @@ class BuildThingScene {
     on_move = () => {
         this.to_point.copy(this.controls.touchPoint);
         this.update_midpoint();
+        //TODO: this.fit_to_workspace_obstacles();
+        //TODO: this.fit_to_edge_obstacles();
         this.transform_copy_group();
     };
 
     on_release = () => {
         this.fold_initial_facet_idx = -1;
         this.fold_initial_edge_idx = -1;
+        this.active_layers_near_idx = -1;
+        this.active_layers_far_idx = -1;
         this.fold_sign = null;
         this.copy_group.visible = false;
         this.disable_clipping_planes();
