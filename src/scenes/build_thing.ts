@@ -316,15 +316,15 @@ class BuildThingScene {
             frontier.push([init_layer_idx, init_facet_idx, this.fold_initial_edge_idx]);
         }
 
-        // only include adjacent edges from the initial link if they are going the same way as the fold
-        const left_edge_idx = pmod(this.fold_initial_edge_idx - 1, links.length);
-        if (links[left_edge_idx] !== null) { // && links[left_edge_idx][0] * this.fold_sign > 0) {
-            frontier.push([init_layer_idx, init_facet_idx, left_edge_idx]);
-        }
-        const right_edge_idx = pmod(this.fold_initial_edge_idx + 1, links.length);
-        if (links[right_edge_idx] !== null) { // && links[right_edge_idx][0] * this.fold_sign > 0) {
-            frontier.push([init_layer_idx, init_facet_idx, right_edge_idx]);
-        }
+        // // only include adjacent edges from the initial link if they are going the same way as the fold
+        // const left_edge_idx = pmod(this.fold_initial_edge_idx - 1, links.length);
+        // if (links[left_edge_idx] !== null) { // && links[left_edge_idx][0] * this.fold_sign > 0) {
+        //     frontier.push([init_layer_idx, init_facet_idx, left_edge_idx]);
+        // }
+        // const right_edge_idx = pmod(this.fold_initial_edge_idx + 1, links.length);
+        // if (links[right_edge_idx] !== null) { // && links[right_edge_idx][0] * this.fold_sign > 0) {
+        //     frontier.push([init_layer_idx, init_facet_idx, right_edge_idx]);
+        // }
 
         while (frontier.length > 0) {
             const [layer_idx, facet_idx, edge_idx] = frontier.pop()!;
@@ -375,15 +375,23 @@ class BuildThingScene {
                 }
             }
 
-            // add adjacent edges to the frontier (if they exist)
-            const left_edge_idx = pmod(next_edge_idx - 1, next_links.length);
-            if (next_links[left_edge_idx] !== null) {
-                frontier.push([next_layer_idx, next_facet_idx, left_edge_idx]);
-            }
-            const right_edge_idx = pmod(next_edge_idx + 1, next_links.length);
-            if (next_links[right_edge_idx] !== null) {
-                frontier.push([next_layer_idx, next_facet_idx, right_edge_idx]);
-            }
+            // // add adjacent edges to the frontier (if they exist)
+            // const left_edge_idx = pmod(next_edge_idx - 1, next_links.length);
+            // if (next_links[left_edge_idx] !== null) {
+            //     frontier.push([next_layer_idx, next_facet_idx, left_edge_idx]);
+            // }
+            // const right_edge_idx = pmod(next_edge_idx + 1, next_links.length);
+            // if (next_links[right_edge_idx] !== null) {
+            //     frontier.push([next_layer_idx, next_facet_idx, right_edge_idx]);
+            // }
+        }
+
+        // set the near index to the closest layer to the camera
+        // tbd about this
+        if (this.fold_sign === 1) {
+            this.active_layers_near_idx = this.thing_t.length - 1;
+        } else {
+            this.active_layers_near_idx = 0;
         }
 
         console.log('active_layers_near_idx', this.active_layers_near_idx);
