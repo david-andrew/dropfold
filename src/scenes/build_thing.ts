@@ -333,7 +333,6 @@ class BuildThingScene {
             ///////////////// Validation checks ///////////////////////
             // check if we've already visited this facet
             const id = `${layer_idx}-${facet_idx}-${edge_idx}`;
-            console.log('visiting', id);
             if (visited_id.has(id)) {
                 console.error(`Malformed thing template. Cycle detected at layer ${layer_idx}, facet ${facet_idx}, edge ${edge_idx}`);
                 continue;
@@ -364,7 +363,6 @@ class BuildThingScene {
             console.assert(next_links[next_edge_idx][2] === edge_idx, 'Invalid connected edge index');
             
             // if the next layer is outside of the current bounds, expand the bounds
-            console.log('offset', next_layer_offset, 'fold_sign', this.fold_sign);
             if (next_layer_offset * this.fold_sign > 0) {
                 // update the near index
                 if (this.fold_sign*(next_layer_idx) > this.fold_sign*(this.active_layers_near_idx)) {
@@ -386,16 +384,6 @@ class BuildThingScene {
             if (next_links[right_edge_idx] !== null) {
                 frontier.push([next_layer_idx, next_facet_idx, right_edge_idx]);
             }
-
-            // // check the two adjacent edges to see if they should be 
-            // if (next_links[left_edge_idx] !== null) {
-            //     const [layer_offset, facet_idx, edge_idx] = next_links[left_edge_idx];
-            //     frontier.push([next_layer_idx + layer_offset, facet_idx, edge_idx]);
-            // }
-            // if (next_links[right_edge_idx] !== null) {
-            //     const [layer_offset, facet_idx, edge_idx] = next_links[right_edge_idx];
-            //     frontier.push([next_layer_idx + layer_offset, facet_idx, edge_idx]);
-            // }
         }
 
         console.log('active_layers_near_idx', this.active_layers_near_idx);
