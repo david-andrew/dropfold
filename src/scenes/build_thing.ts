@@ -29,7 +29,7 @@ export const build_thing_from_seed =
     };
 
 export const paper_plane_scene = (renderer: THREE.WebGLRenderer): SceneFunctions => {
-    return build_thing_scene(paper_plane_states[3])(renderer);
+    return build_thing_scene(paper_plane_states[2])(renderer);
 };
 
 type BuildThingSceneProps = {
@@ -387,7 +387,8 @@ class BuildThingScene {
         }
 
         // set the near index to the closest layer to the camera
-        // tbd about this
+        // this approach skips traversal, and only looks at connection on the touched edge, and all layers towards the camera
+        // this is a mediocre approach to handling which layers are included, but it works well enough
         if (this.fold_sign === 1) {
             this.active_layers_near_idx = this.thing_t.length - 1;
         } else {
@@ -404,7 +405,19 @@ class BuildThingScene {
         // this.fold_sign // direction to go in layers
         // const [i, j] = this.facet_idx_to_template_coords.get(this.fold_initial_facet_idx);
         // console.log('hide_facets_below_active_layer', i, j);
-        console.log('hide_facets_below_active_layer');
+        // console.log('hide_facets_below_active_layer');
+        facets.forEach((f, idx) => {
+            const [layer_idx, facet_idx] = this.facet_idx_to_template_coords.get(idx);
+            const visible = this.fold_sign * (layer_idx - this.active_layers_near_idx) > 0;
+            f.mesh.visible = visible;
+            f.lines.visible = visible;
+        });
+        facets[this.fold_initial_facet_idx].mesh.visible = true; // always show the initial facet
+        facets[this.fold_initial_facet_idx].lines.visible = true; // always show the initial facet
+        edges.forEach((e, idx) => {
+            //TBD how to determine visibility of edges...
+        });
+
     };
 
     update_midpoint = () => {
@@ -657,7 +670,7 @@ class BuildThingScene {
         this.determine_fold_sign();
         this.determine_fold_from_point();
         this.determine_active_facet_layers();
-        this.hide_facets_below_active_layer(this.copy_facets, this.copy_edges);
+        this.hide_facets_below_active_layer(this.copy_facets, this.prime_edges);
         //TODO: hide prime layers
         //TODO: hide other copy layers
 
