@@ -9,6 +9,7 @@ import { clipping_plane_demo } from './scenes/clipping_plane_demo';
 import { business_card } from './scenes/business_card';
 import { build_thing_scene, build_thing_from_seed, paper_plane_scene } from './scenes/build_thing';
 import { msdf_test } from './scenes/msdf-test';
+import { seigaiha_demo } from './scenes/shader_textures';
 
 type SceneKey = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '0';
 const DEFAULT_SCENE_KEY: SceneKey = '1';
@@ -72,7 +73,8 @@ const scene_selector_main = () => {
         build_thing_from_seed([[10, 0], [5, 8.66], [-5, 8.66], [-10, 0], [-5, -8.66], [5, -8.66]]),
         build_thing_from_seed([[0, 3], [-8.66, -5], [4.22, -5]]),
         build_thing_from_seed([[0, 10], [10, 5], [5, -10], [0,-10], [-10, 0], [-5, 10]]),
-        test_touch_controls_scene,
+        seigaiha_demo,
+        // test_touch_controls_scene,
         // clipping_plane_demo,
         msdf_test,
         business_card, 
