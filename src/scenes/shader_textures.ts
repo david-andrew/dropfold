@@ -103,19 +103,42 @@ const seigaiha = ({ foreground = 0x0000ff, background = 0xffffff, side }: Seigai
             }
 
             void main() {
+                // generate the 4 arc colors ranging from color0 to color1
+                vec3 c0 = color0;
+                vec3 c1 = mix(color0, color1, 0.3333);
+                vec3 c2 = mix(color0, color1, 0.6666);
+                vec3 c3 = color1;
+
+
+                // radiuses for each arc
+                float r0 = outer_radius;
+                float r1 = r0 * 0.75;
+                float r2 = r0 * 0.50;
+                float r3 = r0 * 0.25;
+                float r4 = r0 * 0.0;
+
+            
+                // Create a grid where each cell is the size of the spacing
                 vec2 scale = vec2(horizontal_spacing, vertical_spacing);
                 vec2 uv = vUv / scale; // Scale the UV coordinates
-
-                // Compute the staggered grid position
                 vec2 gridOffset = fract(uv);    // Position within the grid cell
                 gridOffset *= scale; // Scale back to original size
 
+
                 // just draw an arc in each cell
                 vec2 center = vec2(horizontal_spacing * 0.5, 0.0);
-                float arc = drawArc(gridOffset, center, inner_radius) - drawArc(gridOffset, center, outer_radius);
-                float arc2 = drawArc(gridOffset, center, 0.25) - drawArc(gridOffset, center, 0.3);
+                float arc0 = drawArc(gridOffset, center, r1) - drawArc(gridOffset, center, r0-0.01);
+                float arc1 = drawArc(gridOffset, center, r2) - drawArc(gridOffset, center, r1-0.01);
+                float arc2 = drawArc(gridOffset, center, r3) - drawArc(gridOffset, center, r2-0.01);
+                float arc3 = drawArc(gridOffset, center, r4) - drawArc(gridOffset, center, r3-0.01);
 
-                gl_FragColor = vec4(mix(vec3(0,0,0), color0, arc), 1.0) + vec4(mix(vec3(0,0,0), color1, arc2), 1.0);
+                gl_FragColor =
+                    + vec4(mix(vec3(0,0,0), c0, arc0), 1.0)
+                    + vec4(mix(vec3(0,0,0), c1, arc1), 1.0)
+                    + vec4(mix(vec3(0,0,0), c2, arc2), 1.0)
+                    + vec4(mix(vec3(0,0,0), c3, arc3), 1.0);
+                ;
+
 
 
                 // gl_FragColor = vec4(gridOffset.x, gridOffset.y, 0.0, 1.0);
