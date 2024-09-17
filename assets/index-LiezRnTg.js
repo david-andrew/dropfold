@@ -4281,7 +4281,7 @@ void main() {
                 vec3 color = mix(backgroundColor, circleColor, circle);
                 gl_FragColor = vec4(color, 1.0);
                 // gl_FragColor = vec4(gridPos.x, gridPos.y, 0.0, 1.0);
-            }`}),By=({color0:s=255,color1:t=16777215,side:e}={})=>new qe({uniforms:{density:{value:.5},outer_radius:{value:.5},vertical_spacing:{value:.5},vertical_stagger:{value:.25},horizontal_spacing:{value:.8},color0:{value:new ft(s)},color1:{value:new ft(t)}},side:e,vertexShader:Sh,fragmentShader:`
+            }`}),By=({color0:s=8900331,color1:t=16777215,side:e}={})=>new qe({uniforms:{density:{value:.5},outer_radius:{value:.5},vertical_spacing:{value:.5},vertical_stagger:{value:.25},horizontal_spacing:{value:.75},color0:{value:new ft(s)},color1:{value:new ft(t)}},side:e,vertexShader:Sh,fragmentShader:`
             // Fragment Shader
             varying vec2 vUv;
 
@@ -4337,28 +4337,28 @@ void main() {
                 float arc3 = drawArc(gridOffset, center, r4) - drawArc(gridOffset, center, r3-0.02);
 
                 vec2 upper_right_center = vec2(horizontal_spacing, -vertical_stagger);
-                float urarc0 = drawArc(gridOffset, upper_right_center, r1) - drawArc(gridOffset, upper_right_center, r0-0.02);
-                float urarc1 = drawArc(gridOffset, upper_right_center, r2) - drawArc(gridOffset, upper_right_center, r1-0.02);
-                float urarc2 = drawArc(gridOffset, upper_right_center, r3) - drawArc(gridOffset, upper_right_center, r2-0.02);
-                float urarc3 = drawArc(gridOffset, upper_right_center, r4) - drawArc(gridOffset, upper_right_center, r3-0.02);
+                float urarc0 = (drawArc(gridOffset, upper_right_center, r1) - drawArc(gridOffset, upper_right_center, r0-0.02)) * (1.0-step(gridOffset.x, horizontal_spacing/2.0));
+                float urarc1 = (drawArc(gridOffset, upper_right_center, r2) - drawArc(gridOffset, upper_right_center, r1-0.02)) * (1.0-step(gridOffset.x, horizontal_spacing/2.0));
+                float urarc2 = (drawArc(gridOffset, upper_right_center, r3) - drawArc(gridOffset, upper_right_center, r2-0.02)) * (1.0-step(gridOffset.x, horizontal_spacing/2.0));
+                float urarc3 = (drawArc(gridOffset, upper_right_center, r4) - drawArc(gridOffset, upper_right_center, r3-0.02)) * (1.0-step(gridOffset.x, horizontal_spacing/2.0));
 
                 vec2 lower_right_center = vec2(horizontal_spacing, vertical_stagger);
-                float lrarc0 = drawArc(gridOffset, lower_right_center, r1) - drawArc(gridOffset, lower_right_center, r0-0.02);
-                float lrarc1 = drawArc(gridOffset, lower_right_center, r2) - drawArc(gridOffset, lower_right_center, r1-0.02);
-                float lrarc2 = drawArc(gridOffset, lower_right_center, r3) - drawArc(gridOffset, lower_right_center, r2-0.02);
-                float lrarc3 = drawArc(gridOffset, lower_right_center, r4) - drawArc(gridOffset, lower_right_center, r3-0.02);
+                float lrarc0 = (drawArc(gridOffset, lower_right_center, r1) - drawArc(gridOffset, lower_right_center, r0-0.02)) * (1.0-step(gridOffset.x, horizontal_spacing/2.0));
+                float lrarc1 = (drawArc(gridOffset, lower_right_center, r2) - drawArc(gridOffset, lower_right_center, r1-0.02)) * (1.0-step(gridOffset.x, horizontal_spacing/2.0));
+                float lrarc2 = (drawArc(gridOffset, lower_right_center, r3) - drawArc(gridOffset, lower_right_center, r2-0.02)) * (1.0-step(gridOffset.x, horizontal_spacing/2.0));
+                float lrarc3 = (drawArc(gridOffset, lower_right_center, r4) - drawArc(gridOffset, lower_right_center, r3-0.02)) * (1.0-step(gridOffset.x, horizontal_spacing/2.0));
 
                 vec2 upper_left_center = vec2(0, -vertical_stagger);
-                float ularc0 = drawArc(gridOffset, upper_left_center, r1) - drawArc(gridOffset, upper_left_center, r0-0.02);
-                float ularc1 = drawArc(gridOffset, upper_left_center, r2) - drawArc(gridOffset, upper_left_center, r1-0.02);
-                float ularc2 = drawArc(gridOffset, upper_left_center, r3) - drawArc(gridOffset, upper_left_center, r2-0.02);
-                float ularc3 = drawArc(gridOffset, upper_left_center, r4) - drawArc(gridOffset, upper_left_center, r3-0.02);
+                float ularc0 = (drawArc(gridOffset, upper_left_center, r1) - drawArc(gridOffset, upper_left_center, r0-0.02)) * step(gridOffset.x, horizontal_spacing/2.0);
+                float ularc1 = (drawArc(gridOffset, upper_left_center, r2) - drawArc(gridOffset, upper_left_center, r1-0.02)) * step(gridOffset.x, horizontal_spacing/2.0);
+                float ularc2 = (drawArc(gridOffset, upper_left_center, r3) - drawArc(gridOffset, upper_left_center, r2-0.02)) * step(gridOffset.x, horizontal_spacing/2.0);
+                float ularc3 = (drawArc(gridOffset, upper_left_center, r4) - drawArc(gridOffset, upper_left_center, r3-0.02)) * step(gridOffset.x, horizontal_spacing/2.0);
 
                 vec2 lower_left_center = vec2(0, vertical_stagger);
-                float llarc0 = drawArc(gridOffset, lower_left_center, r1) - drawArc(gridOffset, lower_left_center, r0-0.02);
-                float llarc1 = drawArc(gridOffset, lower_left_center, r2) - drawArc(gridOffset, lower_left_center, r1-0.02);
-                float llarc2 = drawArc(gridOffset, lower_left_center, r3) - drawArc(gridOffset, lower_left_center, r2-0.02);
-                float llarc3 = drawArc(gridOffset, lower_left_center, r4) - drawArc(gridOffset, lower_left_center, r3-0.02);
+                float llarc0 = (drawArc(gridOffset, lower_left_center, r1) - drawArc(gridOffset, lower_left_center, r0-0.02)) * step(gridOffset.x, horizontal_spacing/2.0);
+                float llarc1 = (drawArc(gridOffset, lower_left_center, r2) - drawArc(gridOffset, lower_left_center, r1-0.02)) * step(gridOffset.x, horizontal_spacing/2.0);
+                float llarc2 = (drawArc(gridOffset, lower_left_center, r3) - drawArc(gridOffset, lower_left_center, r2-0.02)) * step(gridOffset.x, horizontal_spacing/2.0);
+                float llarc3 = (drawArc(gridOffset, lower_left_center, r4) - drawArc(gridOffset, lower_left_center, r3-0.02)) * step(gridOffset.x, horizontal_spacing/2.0);
 
                 gl_FragColor =
                     + vec4(mix(vec3(0,0,0), c0, arc0), 1.0)
@@ -4380,5 +4380,6 @@ void main() {
                     + vec4(mix(vec3(0,0,0), c0, llarc0), 1.0)
                     + vec4(mix(vec3(0,0,0), c1, llarc1), 1.0)
                     + vec4(mix(vec3(0,0,0), c2, llarc2), 1.0)
-                    + vec4(mix(vec3(0,0,0), c3, llarc3), 1.0);
-            }`}),zy=s=>{const t=new Rs,e=new ge(75,window.innerWidth/window.innerHeight,.1,1e3);new ah(e,s.domElement);const n=[[-8.5/2,11/2],[8.5/2,11/2],[8.5/2,-11/2],[-8.5/2,-11/2]],i=new Xn(n.map(([u,d])=>new G(u,d))),r=new Is(i);r.clearGroups(),r.addGroup(0,r.attributes.position.count*2,0),r.addGroup(0,r.attributes.position.count*2,1);const o=Fy({side:ke}),a=By({side:Cn}),c=new ee(r,[o,a]);return t.add(c),e.position.z=15,{update_scene:()=>{c.rotation.x+=.01,c.rotation.y+=.015,s.render(t,e)},camera:e,resetter:()=>{}}};window.THREE=Pv;const ky="1",Ju=document.getElementById("GameView"),ju=s=>{const t=new ff({antialias:!0});t.localClippingEnabled=!0,t.setSize(window.innerWidth,window.innerHeight),Ju.appendChild(t.domElement);const{update_scene:e,camera:n,resetter:i}=s(t),r=()=>{n.aspect=window.innerWidth/window.innerHeight,n.updateProjectionMatrix()},o=()=>{requestAnimationFrame(o),e()};return o(),window.addEventListener("resize",()=>{t.setSize(window.innerWidth,window.innerHeight),r()}),()=>{Ju.removeChild(t.domElement),window.removeEventListener("resize",r),document.removeEventListener("keydown",i),i()}},Vy=()=>{const s=[Iv,ms([[-4.25,5.5],[4.25,5.5],[4.25,-5.5],[-4.25,-5.5]]),ms([[0,10],[9.511,3.09],[5.878,-8.09],[-5.878,-8.09],[-9.511,3.09]]),ms([[10,0],[5,8.66],[-5,8.66],[-10,0],[-5,-8.66],[5,-8.66]]),ms([[0,3],[-8.66,-5],[4.22,-5]]),ms([[0,10],[10,5],[5,-10],[0,-10],[-10,0],[-5,10]]),zy,Oy,qv,Wv];console.assert(s.length<=10,"Too many scenes included. Extra scenes will not be accessible via keyboard shortcuts.");const t=new Map;s.forEach((n,i)=>{const r=i.toString();t.set(r,n)});let e=ju(t.get(ky));document.addEventListener("keydown",n=>{const i=n.key;t.has(i)&&(e(),e=ju(t.get(i)))})};Vy();
+                    + vec4(mix(vec3(0,0,0), c3, llarc3), 1.0)
+                    ;
+            }`}),zy=s=>{const t=new Rs,e=new ge(75,window.innerWidth/window.innerHeight,.1,1e3);new ah(e,s.domElement);const n=[[-8.5/2,11/2],[8.5/2,11/2],[8.5/2,-11/2],[-8.5/2,-11/2]],i=new Xn(n.map(([u,d])=>new G(u,d))),r=new Is(i);r.clearGroups(),r.addGroup(0,r.attributes.position.count*2,0),r.addGroup(0,r.attributes.position.count*2,1);const o=Fy({side:ke}),a=By({side:Cn}),c=new ee(r,[o,a]);return t.add(c),e.position.z=15,{update_scene:()=>{c.rotation.x+=.01,c.rotation.y+=.005,s.render(t,e)},camera:e,resetter:()=>{}}};window.THREE=Pv;const ky="1",Ju=document.getElementById("GameView"),ju=s=>{const t=new ff({antialias:!0});t.localClippingEnabled=!0,t.setSize(window.innerWidth,window.innerHeight),Ju.appendChild(t.domElement);const{update_scene:e,camera:n,resetter:i}=s(t),r=()=>{n.aspect=window.innerWidth/window.innerHeight,n.updateProjectionMatrix()},o=()=>{requestAnimationFrame(o),e()};return o(),window.addEventListener("resize",()=>{t.setSize(window.innerWidth,window.innerHeight),r()}),()=>{Ju.removeChild(t.domElement),window.removeEventListener("resize",r),document.removeEventListener("keydown",i),i()}},Vy=()=>{const s=[Iv,ms([[-4.25,5.5],[4.25,5.5],[4.25,-5.5],[-4.25,-5.5]]),ms([[0,10],[9.511,3.09],[5.878,-8.09],[-5.878,-8.09],[-9.511,3.09]]),ms([[10,0],[5,8.66],[-5,8.66],[-10,0],[-5,-8.66],[5,-8.66]]),ms([[0,3],[-8.66,-5],[4.22,-5]]),ms([[0,10],[10,5],[5,-10],[0,-10],[-10,0],[-5,10]]),zy,Oy,qv,Wv];console.assert(s.length<=10,"Too many scenes included. Extra scenes will not be accessible via keyboard shortcuts.");const t=new Map;s.forEach((n,i)=>{const r=i.toString();t.set(r,n)});let e=ju(t.get(ky));document.addEventListener("keydown",n=>{const i=n.key;t.has(i)&&(e(),e=ju(t.get(i)))})};Vy();
