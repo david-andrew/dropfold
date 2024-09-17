@@ -147,11 +147,12 @@ type Coord = [number, number];
 export const hash_coord = (coord: Coord) => `${coord[0]}_${coord[1]}`;
 
 /**
+ * Positive modulo operation.
  * @param a a number
  * @param b a number
  * @returns `a % b`, ensuring the result is non-negative (python-style modulo)
  */
-export const pmod = (a: number, b: number) => ((a % b) + b) % b; // Positive modulo
+export const pmod = (a: number, b: number) => ((a % b) + b) % b;
 
 export const setup_debug_geometry = (scene: THREE.Scene, debug: boolean) => {
     if (!debug) {
