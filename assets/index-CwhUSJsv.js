@@ -4316,10 +4316,10 @@ void main() {
 
                 // radiuses for each arc
                 float r0 = outer_radius;
-                float r1 = r0 * 0.8;
-                float r2 = r0 * 0.6;
-                float r3 = r0 * 0.4;
-                float r4 = r0 * 0.2;
+                float r1 = r0 * 0.75;
+                float r2 = r0 * 0.50;
+                float r3 = r0 * 0.25;
+                float r4 = r0 * 0.0;
 
             
                 // Create a grid where each cell is the size of the spacing
