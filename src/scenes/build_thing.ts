@@ -5,6 +5,7 @@ import { SceneFunctions } from '../main';
 import { states as paper_plane_states, ThingTemplate } from './test_paper_plane';
 import { OrbitalPointer } from '../controls';
 import { setup_debug_geometry, hash_coord, getLineIntersection, getLineCircleIntersections, shrinkPolygon, pmod } from '../utils';
+import { harlequin_circles, seigaiha } from './shader_textures';
 
 import { Line2 } from 'three/examples/jsm/lines/Line2.js';
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
@@ -734,9 +735,16 @@ class Facet {
         this.vertices = vertices.map(([x, y]) => new THREE.Vector2(x, y));
         const shape = new THREE.Shape(this.vertices);
         const geometry = new THREE.ShapeGeometry(shape);
-        const material = new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, clippingPlanes: clipping_planes });
-        this.mesh = new THREE.Mesh(geometry, material);
+        // adjust the geometry groups having multi-sided shader materials
+        geometry.clearGroups();
+        geometry.addGroup(0, geometry.attributes.position.count * 2, 0);
+        geometry.addGroup(0, geometry.attributes.position.count * 2, 1);
+        const front = seigaiha({ side: THREE.FrontSide, clippingPlanes: clipping_planes });
+        const back = harlequin_circles({ side: THREE.BackSide, clippingPlanes: clipping_planes });
+        // const material = new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, clippingPlanes: clipping_planes });
+        this.mesh = new THREE.Mesh(geometry, [front, back]);
         this.mesh.position.z = z_offset;
+
 
         // // make the lines
         // const lines = new THREE.EdgesGeometry(geometry);

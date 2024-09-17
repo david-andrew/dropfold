@@ -4,27 +4,35 @@ import { OrbitControls } from 'three/examples/jsm/Addons.js';
 
 const passthrough_vertex_shader = `
     varying vec2 vUv;
+    #include <clipping_planes_pars_vertex>
     void main() {
+        #include <begin_vertex>
         vUv = uv;
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        #include <project_vertex>
+        #include <clipping_planes_vertex>
     }
 `;
 
 type MaterialProps = {
     side?: THREE.Side;
+    clippingPlanes?: THREE.Plane[];
 };
 
 type HarlequinCirclesProps = {
     foreground?: THREE.ColorRepresentation;
     background?: THREE.ColorRepresentation;
 } & MaterialProps;
-const harlequin_circles = ({
+export const harlequin_circles = ({
     foreground = 0xff0000,
     background = 0x000000,
-    side
+    side,
+    clippingPlanes
 }: HarlequinCirclesProps = {}): THREE.ShaderMaterial => {
     return new THREE.ShaderMaterial({
         side,
+        clippingPlanes,
+        clipping: true,
         uniforms: {
             radius: { value: 0.5 }, // Circle radius
             density: { value: 1.0 }, // Circles per length
@@ -33,6 +41,7 @@ const harlequin_circles = ({
         },
         vertexShader: passthrough_vertex_shader,
         fragmentShader: `
+            #include <clipping_planes_pars_fragment>
             varying vec2 vUv;
 
             uniform float radius;
@@ -46,6 +55,7 @@ const harlequin_circles = ({
             }
 
             void main() {
+                #include <clipping_planes_fragment>
                 vec2 uv = vUv * density;
                 vec2 gridPos = fract(uv);
                 vec2 gridCenter = vec2(0.5, 0.5);
@@ -54,7 +64,6 @@ const harlequin_circles = ({
 
                 vec3 color = mix(backgroundColor, circleColor, circle);
                 gl_FragColor = vec4(color, 1.0);
-                // gl_FragColor = vec4(gridPos.x, gridPos.y, 0.0, 1.0);
             }`
     });
 };
@@ -63,7 +72,7 @@ type SeigaihaProps = {
     color0?: THREE.ColorRepresentation;
     color1?: THREE.ColorRepresentation;
 } & MaterialProps;
-const seigaiha = ({ color0 = 0x87ceeb, color1 = 0xffffff, side }: SeigaihaProps = {}) => {
+export const seigaiha = ({ color0 = 0x87ceeb, color1 = 0xffffff, side, clippingPlanes }: SeigaihaProps = {}) => {
     return new THREE.ShaderMaterial({
         uniforms: {
             density: { value: 0.5 },
@@ -75,8 +84,11 @@ const seigaiha = ({ color0 = 0x87ceeb, color1 = 0xffffff, side }: SeigaihaProps 
             color1: { value: new THREE.Color(color1) }
         },
         side,
+        clippingPlanes,
+        clipping: true,
         vertexShader: passthrough_vertex_shader,
         fragmentShader: `
+            #include <clipping_planes_pars_fragment>
             // Fragment Shader
             varying vec2 vUv;
 
@@ -102,6 +114,8 @@ const seigaiha = ({ color0 = 0x87ceeb, color1 = 0xffffff, side }: SeigaihaProps 
             }
 
             void main() {
+                #include <clipping_planes_fragment>
+
                 // generate the 4 arc colors ranging from color0 to color1
                 vec3 c0 = color0;
                 vec3 c1 = mix(color0, color1, 0.3333);
