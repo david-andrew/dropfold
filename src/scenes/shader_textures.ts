@@ -217,8 +217,8 @@ export const seigaiha_demo = (renderer: THREE.WebGLRenderer): SceneFunctions => 
 
     const update_scene = () => {
         // Rotate the mesh for some simple animation
-        // mesh.rotation.x += 0.01;
-        // mesh.rotation.y += 0.015;
+        mesh.rotation.x += 0.01;
+        mesh.rotation.y += 0.005;
 
         // Render the scene from the perspective of the camera
         renderer.render(scene, camera);
