@@ -60,20 +60,19 @@ const harlequin_circles = ({
 };
 
 type SeigaihaProps = {
-    foreground?: THREE.ColorRepresentation;
-    background?: THREE.ColorRepresentation;
+    color0?: THREE.ColorRepresentation;
+    color1?: THREE.ColorRepresentation;
 } & MaterialProps;
-const seigaiha = ({ foreground = 0x0000ff, background = 0xffffff, side }: SeigaihaProps = {}) => {
+const seigaiha = ({ color0 = 0x0000ff, color1 = 0xffffff, side }: SeigaihaProps = {}) => {
     return new THREE.ShaderMaterial({
         uniforms: {
-            // radius: { value: 0.5 },
-            inner_radius: { value: 0.45 },
+            density: { value: 0.5 },
             outer_radius: { value: 0.5 },
             vertical_spacing: { value: 0.5 },
             vertical_stagger: { value: 0.25 },
             horizontal_spacing: { value: 0.8 },
-            color0: { value: new THREE.Color(foreground) },
-            color1: { value: new THREE.Color(background) }
+            color0: { value: new THREE.Color(color0) },
+            color1: { value: new THREE.Color(color1) }
         },
         side,
         vertexShader: passthrough_vertex_shader,
@@ -81,7 +80,7 @@ const seigaiha = ({ foreground = 0x0000ff, background = 0xffffff, side }: Seigai
             // Fragment Shader
             varying vec2 vUv;
 
-            uniform float inner_radius;
+            uniform float density;
             uniform float outer_radius;
             uniform float vertical_spacing;
             uniform float vertical_stagger;
@@ -97,7 +96,7 @@ const seigaiha = ({ foreground = 0x0000ff, background = 0xffffff, side }: Seigai
                 float right_dist = distance(uv, right_avoid);
 
                 // draw the arc anywhere within radius, so long as it is not within left or right avoid circles (which have radius outer_radius)
-                float arc = smoothstep(radius - 0.005, radius + 0.005, dist);
+                float arc = step(radius, dist);//smoothstep(radius - 0.005, radius + 0.005, dist);
                 float masks = step(outer_radius, left_dist) * step(outer_radius, right_dist);
                 return arc * masks;
             }
@@ -120,44 +119,63 @@ const seigaiha = ({ foreground = 0x0000ff, background = 0xffffff, side }: Seigai
             
                 // Create a grid where each cell is the size of the spacing
                 vec2 scale = vec2(horizontal_spacing, vertical_spacing);
-                vec2 uv = vUv / scale; // Scale the UV coordinates
+                vec2 uv = vUv * density / scale; // Scale the UV coordinates
                 vec2 gridOffset = fract(uv);    // Position within the grid cell
                 gridOffset *= scale; // Scale back to original size
 
 
                 // just draw an arc in each cell
                 vec2 center = vec2(horizontal_spacing * 0.5, 0.0);
-                float arc0 = drawArc(gridOffset, center, r1) - drawArc(gridOffset, center, r0-0.01);
-                float arc1 = drawArc(gridOffset, center, r2) - drawArc(gridOffset, center, r1-0.01);
-                float arc2 = drawArc(gridOffset, center, r3) - drawArc(gridOffset, center, r2-0.01);
-                float arc3 = drawArc(gridOffset, center, r4) - drawArc(gridOffset, center, r3-0.01);
+                float arc0 = drawArc(gridOffset, center, r1) - drawArc(gridOffset, center, r0-0.02);
+                float arc1 = drawArc(gridOffset, center, r2) - drawArc(gridOffset, center, r1-0.02);
+                float arc2 = drawArc(gridOffset, center, r3) - drawArc(gridOffset, center, r2-0.02);
+                float arc3 = drawArc(gridOffset, center, r4) - drawArc(gridOffset, center, r3-0.02);
+
+                vec2 upper_right_center = vec2(horizontal_spacing, -vertical_stagger);
+                float urarc0 = drawArc(gridOffset, upper_right_center, r1) - drawArc(gridOffset, upper_right_center, r0-0.02);
+                float urarc1 = drawArc(gridOffset, upper_right_center, r2) - drawArc(gridOffset, upper_right_center, r1-0.02);
+                float urarc2 = drawArc(gridOffset, upper_right_center, r3) - drawArc(gridOffset, upper_right_center, r2-0.02);
+                float urarc3 = drawArc(gridOffset, upper_right_center, r4) - drawArc(gridOffset, upper_right_center, r3-0.02);
+
+                vec2 lower_right_center = vec2(horizontal_spacing, vertical_stagger);
+                float lrarc0 = drawArc(gridOffset, lower_right_center, r1) - drawArc(gridOffset, lower_right_center, r0-0.02);
+                float lrarc1 = drawArc(gridOffset, lower_right_center, r2) - drawArc(gridOffset, lower_right_center, r1-0.02);
+                float lrarc2 = drawArc(gridOffset, lower_right_center, r3) - drawArc(gridOffset, lower_right_center, r2-0.02);
+                float lrarc3 = drawArc(gridOffset, lower_right_center, r4) - drawArc(gridOffset, lower_right_center, r3-0.02);
+
+                vec2 upper_left_center = vec2(0, -vertical_stagger);
+                float ularc0 = drawArc(gridOffset, upper_left_center, r1) - drawArc(gridOffset, upper_left_center, r0-0.02);
+                float ularc1 = drawArc(gridOffset, upper_left_center, r2) - drawArc(gridOffset, upper_left_center, r1-0.02);
+                float ularc2 = drawArc(gridOffset, upper_left_center, r3) - drawArc(gridOffset, upper_left_center, r2-0.02);
+                float ularc3 = drawArc(gridOffset, upper_left_center, r4) - drawArc(gridOffset, upper_left_center, r3-0.02);
+
+                vec2 lower_left_center = vec2(0, vertical_stagger);
+                float llarc0 = drawArc(gridOffset, lower_left_center, r1) - drawArc(gridOffset, lower_left_center, r0-0.02);
+                float llarc1 = drawArc(gridOffset, lower_left_center, r2) - drawArc(gridOffset, lower_left_center, r1-0.02);
+                float llarc2 = drawArc(gridOffset, lower_left_center, r3) - drawArc(gridOffset, lower_left_center, r2-0.02);
+                float llarc3 = drawArc(gridOffset, lower_left_center, r4) - drawArc(gridOffset, lower_left_center, r3-0.02);
 
                 gl_FragColor =
                     + vec4(mix(vec3(0,0,0), c0, arc0), 1.0)
                     + vec4(mix(vec3(0,0,0), c1, arc1), 1.0)
                     + vec4(mix(vec3(0,0,0), c2, arc2), 1.0)
-                    + vec4(mix(vec3(0,0,0), c3, arc3), 1.0);
-                ;
-
-
-
-                // gl_FragColor = vec4(gridOffset.x, gridOffset.y, 0.0, 1.0);
-
-                // // Shift alternate rows by half a cell
-                // if (mod(gridPos.y, 2.0) > 0.5) {
-                //     gridOffset.x += 0.5;
-                // }
-
-                // // Adjust so the pattern repeats horizontally
-                // gridOffset = fract(gridOffset);
-
-                // // Draw the arc
-                // float arc = drawArc(gridOffset, vec2(0.5, 0.5), radius);
-
-                // // Mix the wave color and background color
-                // vec3 color = mix(color1, color0, arc);
-
-                // gl_FragColor = vec4(color, 1.0);
+                    + vec4(mix(vec3(0,0,0), c3, arc3), 1.0)
+                    + vec4(mix(vec3(0,0,0), c0, urarc0), 1.0)
+                    + vec4(mix(vec3(0,0,0), c1, urarc1), 1.0)
+                    + vec4(mix(vec3(0,0,0), c2, urarc2), 1.0)
+                    + vec4(mix(vec3(0,0,0), c3, urarc3), 1.0)
+                    + vec4(mix(vec3(0,0,0), c0, lrarc0), 1.0)
+                    + vec4(mix(vec3(0,0,0), c1, lrarc1), 1.0)
+                    + vec4(mix(vec3(0,0,0), c2, lrarc2), 1.0)
+                    + vec4(mix(vec3(0,0,0), c3, lrarc3), 1.0)
+                    + vec4(mix(vec3(0,0,0), c0, ularc0), 1.0)
+                    + vec4(mix(vec3(0,0,0), c1, ularc1), 1.0)
+                    + vec4(mix(vec3(0,0,0), c2, ularc2), 1.0)
+                    + vec4(mix(vec3(0,0,0), c3, ularc3), 1.0)
+                    + vec4(mix(vec3(0,0,0), c0, llarc0), 1.0)
+                    + vec4(mix(vec3(0,0,0), c1, llarc1), 1.0)
+                    + vec4(mix(vec3(0,0,0), c2, llarc2), 1.0)
+                    + vec4(mix(vec3(0,0,0), c3, llarc3), 1.0);
             }`
     });
 };
@@ -198,8 +216,8 @@ export const seigaiha_demo = (renderer: THREE.WebGLRenderer): SceneFunctions => 
 
     const update_scene = () => {
         // Rotate the mesh for some simple animation
-        // mesh.rotation.x += 0.01;
-        // mesh.rotation.y += 0.01;
+        mesh.rotation.x += 0.01;
+        mesh.rotation.y += 0.015;
 
         // Render the scene from the perspective of the camera
         renderer.render(scene, camera);
