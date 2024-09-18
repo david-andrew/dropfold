@@ -4242,7 +4242,7 @@ void main() {
 
                 vec3 color = mix(backgroundColor, circleColor, circle);
                 gl_FragColor = vec4(color, 1.0);
-            }`}),lc=({color0:s=8900331,color1:t=16777215,side:e,clippingPlanes:n}={})=>new qe({uniforms:{density:{value:.5},outer_radius:{value:.5},vertical_spacing:{value:.5},vertical_stagger:{value:.25},horizontal_spacing:{value:.75},color0:{value:new ft(s)},color1:{value:new ft(t)}},side:e,clippingPlanes:n,clipping:!0,vertexShader:dh,fragmentShader:`
+            }`}),lc=({color0:s=8900331,color1:t=16777215,side:e,clippingPlanes:n}={})=>new qe({uniforms:{density:{value:.5},outer_radius:{value:.45},vertical_spacing:{value:.5},vertical_stagger:{value:.25},horizontal_spacing:{value:.75},color0:{value:new ft(s)},color1:{value:new ft(t)}},side:e,clippingPlanes:n,clipping:!0,vertexShader:dh,fragmentShader:`
             #include <clipping_planes_pars_fragment>
             // Fragment Shader
             varying vec2 vUv;
@@ -4280,9 +4280,9 @@ void main() {
 
                 // radiuses for each arc
                 float r0 = outer_radius;
-                float r1 = r0 * 0.75;
-                float r2 = r0 * 0.50;
-                float r3 = r0 * 0.25;
+                float r1 = r0 * 0.70;
+                float r2 = r0 * 0.45;
+                float r3 = r0 * 0.225;
                 float r4 = r0 * 0.0;
 
             
@@ -4295,31 +4295,31 @@ void main() {
 
                 // just draw an arc in each cell
                 vec2 center = vec2(horizontal_spacing * 0.5, 0.0);
-                float arc0 = drawArc(gridOffset, center, r1) - drawArc(gridOffset, center, r0-0.02);
+                float arc0 = drawArc(gridOffset, center, r1) - drawArc(gridOffset, center, r0-0.04);
                 float arc1 = drawArc(gridOffset, center, r2) - drawArc(gridOffset, center, r1-0.02);
                 float arc2 = drawArc(gridOffset, center, r3) - drawArc(gridOffset, center, r2-0.02);
                 float arc3 = drawArc(gridOffset, center, r4) - drawArc(gridOffset, center, r3-0.02);
 
                 vec2 upper_right_center = vec2(horizontal_spacing, -vertical_stagger);
-                float urarc0 = (drawArc(gridOffset, upper_right_center, r1) - drawArc(gridOffset, upper_right_center, r0-0.02)) * (1.0-step(gridOffset.x, horizontal_spacing/2.0));
+                float urarc0 = (drawArc(gridOffset, upper_right_center, r1) - drawArc(gridOffset, upper_right_center, r0-0.04)) * (1.0-step(gridOffset.x, horizontal_spacing/2.0));
                 float urarc1 = (drawArc(gridOffset, upper_right_center, r2) - drawArc(gridOffset, upper_right_center, r1-0.02)) * (1.0-step(gridOffset.x, horizontal_spacing/2.0));
                 float urarc2 = (drawArc(gridOffset, upper_right_center, r3) - drawArc(gridOffset, upper_right_center, r2-0.02)) * (1.0-step(gridOffset.x, horizontal_spacing/2.0));
                 float urarc3 = (drawArc(gridOffset, upper_right_center, r4) - drawArc(gridOffset, upper_right_center, r3-0.02)) * (1.0-step(gridOffset.x, horizontal_spacing/2.0));
 
                 vec2 lower_right_center = vec2(horizontal_spacing, vertical_stagger);
-                float lrarc0 = (drawArc(gridOffset, lower_right_center, r1) - drawArc(gridOffset, lower_right_center, r0-0.02)) * (1.0-step(gridOffset.x, horizontal_spacing/2.0));
+                float lrarc0 = (drawArc(gridOffset, lower_right_center, r1) - drawArc(gridOffset, lower_right_center, r0-0.04)) * (1.0-step(gridOffset.x, horizontal_spacing/2.0));
                 float lrarc1 = (drawArc(gridOffset, lower_right_center, r2) - drawArc(gridOffset, lower_right_center, r1-0.02)) * (1.0-step(gridOffset.x, horizontal_spacing/2.0));
                 float lrarc2 = (drawArc(gridOffset, lower_right_center, r3) - drawArc(gridOffset, lower_right_center, r2-0.02)) * (1.0-step(gridOffset.x, horizontal_spacing/2.0));
                 float lrarc3 = (drawArc(gridOffset, lower_right_center, r4) - drawArc(gridOffset, lower_right_center, r3-0.02)) * (1.0-step(gridOffset.x, horizontal_spacing/2.0));
 
                 vec2 upper_left_center = vec2(0, -vertical_stagger);
-                float ularc0 = (drawArc(gridOffset, upper_left_center, r1) - drawArc(gridOffset, upper_left_center, r0-0.02)) * step(gridOffset.x, horizontal_spacing/2.0);
+                float ularc0 = (drawArc(gridOffset, upper_left_center, r1) - drawArc(gridOffset, upper_left_center, r0-0.04)) * step(gridOffset.x, horizontal_spacing/2.0);
                 float ularc1 = (drawArc(gridOffset, upper_left_center, r2) - drawArc(gridOffset, upper_left_center, r1-0.02)) * step(gridOffset.x, horizontal_spacing/2.0);
                 float ularc2 = (drawArc(gridOffset, upper_left_center, r3) - drawArc(gridOffset, upper_left_center, r2-0.02)) * step(gridOffset.x, horizontal_spacing/2.0);
                 float ularc3 = (drawArc(gridOffset, upper_left_center, r4) - drawArc(gridOffset, upper_left_center, r3-0.02)) * step(gridOffset.x, horizontal_spacing/2.0);
 
                 vec2 lower_left_center = vec2(0, vertical_stagger);
-                float llarc0 = (drawArc(gridOffset, lower_left_center, r1) - drawArc(gridOffset, lower_left_center, r0-0.02)) * step(gridOffset.x, horizontal_spacing/2.0);
+                float llarc0 = (drawArc(gridOffset, lower_left_center, r1) - drawArc(gridOffset, lower_left_center, r0-0.04)) * step(gridOffset.x, horizontal_spacing/2.0);
                 float llarc1 = (drawArc(gridOffset, lower_left_center, r2) - drawArc(gridOffset, lower_left_center, r1-0.02)) * step(gridOffset.x, horizontal_spacing/2.0);
                 float llarc2 = (drawArc(gridOffset, lower_left_center, r3) - drawArc(gridOffset, lower_left_center, r2-0.02)) * step(gridOffset.x, horizontal_spacing/2.0);
                 float llarc3 = (drawArc(gridOffset, lower_left_center, r4) - drawArc(gridOffset, lower_left_center, r3-0.02)) * step(gridOffset.x, horizontal_spacing/2.0);
