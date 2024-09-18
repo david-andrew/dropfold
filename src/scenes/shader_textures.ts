@@ -24,12 +24,12 @@ export type MaterialProps = {
 export type MaterialFactory = (props?: MaterialProps) => THREE.Material;
 
 type HarlequinCirclesProps = {
-    foreground?: THREE.ColorRepresentation;
-    background?: THREE.ColorRepresentation;
+    color0?: THREE.ColorRepresentation;
+    color1?: THREE.ColorRepresentation;
 } & MaterialProps;
 export const harlequin_circles = ({
-    foreground = 0xff0000,
-    background = 0x000000,
+    color0 = 0xff0000,
+    color1 = 0x000000,
     side,
     clippingPlanes
 }: HarlequinCirclesProps = {}): THREE.ShaderMaterial => {
@@ -40,8 +40,8 @@ export const harlequin_circles = ({
         uniforms: {
             radius: { value: 0.5 }, // Circle radius
             density: { value: 1.0 }, // Circles per length
-            circleColor: { value: new THREE.Color(foreground) }, // Red circles
-            backgroundColor: { value: new THREE.Color(background) } // Black background
+            circleColor: { value: new THREE.Color(color0) }, // Red circles
+            backgroundColor: { value: new THREE.Color(color1) } // Black background
         },
         vertexShader: passthrough_vertex_shader,
         fragmentShader: `

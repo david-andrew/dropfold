@@ -17,7 +17,8 @@ export const build_thing_scene =
         const material_factories: MaterialFactory[] = [
             (props: MaterialProps = {}) => seigaiha({ side: THREE.FrontSide, ...props}),
             (props: MaterialProps = {}) => seigaiha({ side: THREE.BackSide, color1:0x000000, ...props}),
-            // (props: MaterialProps = {}) => harlequin_circles({ side: THREE.BackSide, ...props}),
+            // (props: MaterialProps = {}) => harlequin_circles({ side: THREE.FrontSide, ...props}),
+            // (props: MaterialProps = {}) => harlequin_circles({ side: THREE.BackSide, color0: 0x00ffff, ...props}),
             // (props: MaterialProps = {}) => new THREE.MeshBasicMaterial({ color: 0x2288ff, side: THREE.BackSide, ...props })
         ]
         const scene = new BuildThingScene({ thing_t, renderer, material_factories });
@@ -145,7 +146,11 @@ class BuildThingScene {
         this.disable_clipping_planes();
 
         // setup the material factories
-        if (material_factories !== undefined) {
+        // if (material_factories && material_factories.length < 2) {
+        //     console.error('Must provide at least 2 material factories for front and back sides');
+        //     material_factories = undefined;
+        // }
+        if (material_factories !== undefined && material_factories.length > 0) {
             this.material_factories = material_factories;
         } else {
             this.material_factories = [
@@ -760,7 +765,7 @@ class Facet {
         geometry.addGroup(0, geometry.attributes.position.count * 2, 0);
         geometry.addGroup(0, geometry.attributes.position.count * 2, 1);
         const materials = material_factories.map((factory) => factory({clippingPlanes: clipping_planes}));
-        this.mesh = new THREE.Mesh(geometry, materials);
+        this.mesh = new THREE.Mesh(geometry, materials.length > 1 ? materials: materials[0]);
         this.mesh.position.z = z_offset;
 
 
