@@ -105,6 +105,8 @@ export const seigaiha = ({ color0 = 0x87ceeb, color1 = 0xffffff, side, clippingP
             uniform vec3 color1;
 
             float drawArc(vec2 uv, vec2 center, float radius) {
+                float epsilon = 0.0025; // Small value for smoothstep
+
                 vec2 left_avoid = vec2(center.x - horizontal_spacing * 0.5, center.y - vertical_stagger);
                 vec2 right_avoid = vec2(center.x + horizontal_spacing * 0.5, center.y - vertical_stagger);
                 float dist = distance(uv, center);
@@ -112,8 +114,8 @@ export const seigaiha = ({ color0 = 0x87ceeb, color1 = 0xffffff, side, clippingP
                 float right_dist = distance(uv, right_avoid);
 
                 // draw the arc anywhere within radius, so long as it is not within left or right avoid circles (which have radius outer_radius)
-                float arc = step(radius, dist);//smoothstep(radius - 0.005, radius + 0.005, dist);
-                float masks = step(outer_radius, left_dist) * step(outer_radius, right_dist);
+                float arc = smoothstep(radius - epsilon, radius + epsilon, dist);
+                float masks = smoothstep(outer_radius - epsilon, outer_radius + epsilon, left_dist) * smoothstep(outer_radius - epsilon, outer_radius + epsilon, right_dist);
                 return arc * masks;
             }
 
