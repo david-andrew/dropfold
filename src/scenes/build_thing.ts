@@ -5,7 +5,7 @@ import { SceneFunctions } from '../main';
 import { states as paper_plane_states, ThingTemplate } from './test_paper_plane';
 import { OrbitalPointer } from '../controls';
 import { setup_debug_geometry, hash_coord, getLineIntersection, getLineCircleIntersections, shrinkPolygon, pmod } from '../utils';
-import { harlequin_circles, seigaiha } from './shader_textures';
+import { MaterialFactory, MaterialProps, harlequin_circles, seigaiha } from './shader_textures';
 
 import { Line2 } from 'three/examples/jsm/lines/Line2.js';
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
@@ -14,7 +14,13 @@ import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 export const build_thing_scene =
     (thing_t: ThingTemplate) =>
     (renderer: THREE.WebGLRenderer): SceneFunctions => {
-        const scene = new BuildThingScene({ thing_t, renderer });
+        const material_factories: MaterialFactory[] = [
+            (props: MaterialProps = {}) => seigaiha({ side: THREE.FrontSide, ...props}),
+            (props: MaterialProps = {}) => seigaiha({ side: THREE.BackSide, color1:0x000000, ...props}),
+            // (props: MaterialProps = {}) => harlequin_circles({ side: THREE.BackSide, ...props}),
+            // (props: MaterialProps = {}) => new THREE.MeshBasicMaterial({ color: 0x2288ff, side: THREE.BackSide, ...props })
+        ]
+        const scene = new BuildThingScene({ thing_t, renderer, material_factories });
         return {
             update_scene: scene.update_scene,
             camera: scene.camera,
@@ -40,6 +46,7 @@ type BuildThingSceneProps = {
     background_color?: THREE.ColorRepresentation;
     edge_color?: THREE.ColorRepresentation;
     face_color?: THREE.ColorRepresentation;
+    material_factories?: MaterialFactory[];
     debug_geometry?: boolean;
     shrink_workspaces?: boolean;
 };
@@ -49,6 +56,7 @@ class BuildThingScene {
     background_color: THREE.ColorRepresentation;
     edge_color: THREE.ColorRepresentation;
     face_color: THREE.ColorRepresentation;
+    material_factories: MaterialFactory[];
     debug_geometry: boolean;
     shrink_workspaces: boolean;
 
@@ -108,6 +116,7 @@ class BuildThingScene {
         background_color = 0, //0x222222,
         edge_color = 0xffffff, //0x000000,
         face_color = 0, //0xffffff,
+        material_factories,
         debug_geometry = false,
         shrink_workspaces = false
     }: BuildThingSceneProps) {
@@ -119,7 +128,7 @@ class BuildThingScene {
         this.edge_color = edge_color;
         this.face_color = face_color;
         this.debug_geometry = debug_geometry;
-        this.shrink_workspaces = shrink_workspaces;
+        this.shrink_workspaces = shrink_workspaces;        
 
         // setup the scene
         this.renderer = renderer;
@@ -134,6 +143,16 @@ class BuildThingScene {
         this.prime_clip_planes.push(new THREE.Plane(new THREE.Vector3(0, 1, 0).normalize(), 0));
         this.copy_clip_planes.push(new THREE.Plane(new THREE.Vector3(0, 1, 0).normalize(), 0));
         this.disable_clipping_planes();
+
+        // setup the material factories
+        if (material_factories !== undefined) {
+            this.material_factories = material_factories;
+        } else {
+            this.material_factories = [
+                (props: MaterialProps = {}) => new THREE.MeshBasicMaterial({ color: this.face_color, side: THREE.FrontSide, ...props }),
+                (props: MaterialProps = {}) => new THREE.MeshBasicMaterial({ color: this.face_color, side: THREE.BackSide, ...props })                        
+            ]
+        }
 
         // setup debug geometry
         const { hide_debug_geometry, show_debug_geometry } = setup_debug_geometry(this.scene, this.debug_geometry);
@@ -171,7 +190,7 @@ class BuildThingScene {
                 const f = new Facet({
                     vertices: facet_t.vertices,
                     z_offset: i * this.layer_thickness,
-                    color: this.face_color,
+                    material_factories: this.material_factories,
                     edge_color: this.edge_color,
                     clipping_planes
                 });
@@ -720,7 +739,8 @@ class BuildThingScene {
 type FacetProps = {
     vertices: Array<[number, number]>;
     z_offset?: number;
-    color: THREE.ColorRepresentation;
+    // color: THREE.ColorRepresentation;
+    material_factories: MaterialFactory[];
     edge_color: THREE.ColorRepresentation;
     clipping_planes: THREE.Plane[];
 };
@@ -730,7 +750,7 @@ class Facet {
     mesh: THREE.Mesh;
     lines: Line2; // THREE.LineSegments;
 
-    constructor({ vertices, z_offset = 0.0, color, edge_color, clipping_planes }: FacetProps) {
+    constructor({ vertices, z_offset = 0.0, material_factories, edge_color, clipping_planes }: FacetProps) {
         // make the mesh
         this.vertices = vertices.map(([x, y]) => new THREE.Vector2(x, y));
         const shape = new THREE.Shape(this.vertices);
@@ -739,10 +759,8 @@ class Facet {
         geometry.clearGroups();
         geometry.addGroup(0, geometry.attributes.position.count * 2, 0);
         geometry.addGroup(0, geometry.attributes.position.count * 2, 1);
-        const front = seigaiha({ side: THREE.FrontSide, clippingPlanes: clipping_planes });
-        const back = harlequin_circles({ side: THREE.BackSide, clippingPlanes: clipping_planes });
-        // const material = new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, clippingPlanes: clipping_planes });
-        this.mesh = new THREE.Mesh(geometry, [front, back]);
+        const materials = material_factories.map((factory) => factory({clippingPlanes: clipping_planes}));
+        this.mesh = new THREE.Mesh(geometry, materials);
         this.mesh.position.z = z_offset;
 
 

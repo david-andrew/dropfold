@@ -14,10 +14,14 @@ const passthrough_vertex_shader = `
     }
 `;
 
-type MaterialProps = {
+export type MaterialProps = {
     side?: THREE.Side;
     clippingPlanes?: THREE.Plane[];
 };
+
+// use partial evaluation to convert below material functions to factories
+// e.g. `redblack_factory = (props?: MaterialProps = {}) => harlequin_circles({ foreground: 0xff0000, background: 0x000000, ...props })`
+export type MaterialFactory = (props?: MaterialProps) => THREE.Material;
 
 type HarlequinCirclesProps = {
     foreground?: THREE.ColorRepresentation;
