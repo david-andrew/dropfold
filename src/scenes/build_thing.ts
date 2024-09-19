@@ -486,18 +486,29 @@ class BuildThingScene {
         temp = this.to_point.clone().applyMatrix4(inv_tf);
         const local_to_point = new THREE.Vector2(temp.x, temp.y);
 
+        
+        const original_vertices: THREE.Vector2[] = []
+        for (let facet_idx of this.active_facets) {
+            const f = this.prime_facets[facet_idx];
+            for (let vertex of f.vertices) {
+                const v = new THREE.Vector2(vertex.x, vertex.y);
+                original_vertices.push(v);
+            }
+        }
+
+        
         let vertices: THREE.Vector2[];
         let local_from_point: THREE.Vector2;
         if (this.shrink_workspaces) {
             // shrink the vertices of the facet a smidge
-            [vertices, [local_from_point]] = shrinkPolygon(facet.vertices, 0.95, [original_local_from_point]);
+            [vertices, [local_from_point]] = shrinkPolygon(original_vertices, 0.95, [original_local_from_point]);
 
             // insert an extra point into vertices to prevent the singularity around the from_point
             // still not perfect, but works well enough for now. Intersections between the workspaces of the two vertices on the active edge and this workspace is too sharp
             // To fix, consider using sdf with smooth combination of the workspaces (and maybe removing/adjusting this extra point)
             vertices.push(local_from_point.clone().lerp(original_local_from_point, 2));
         } else {
-            vertices = facet.vertices;
+            vertices = original_vertices;
             local_from_point = original_local_from_point;
         }
         // best point shifted directly along the drag direction
@@ -548,6 +559,9 @@ class BuildThingScene {
     fit_to_edge_obstacles = () => {
         //TODO
     }
+
+    // fit_to_over_under_edge_obstacles = () => {}
+    // fit_to_etc_obstacles = () => {}
 
 
 
@@ -729,8 +743,8 @@ class BuildThingScene {
     on_move = () => {
         this.to_point.copy(this.controls.touchPoint);
         this.update_midpoint();
-        //TODO: this.fit_to_workspace_obstacles();
-        //TODO: this.fit_to_edge_obstacles();
+        this.fit_to_workspace_obstacles();
+        this.fit_to_edge_obstacles();
         this.transform_copy_group();
     };
 
