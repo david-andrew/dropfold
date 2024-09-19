@@ -75,6 +75,7 @@ class BuildThingScene {
     thing_t: ThingTemplate;
     facet_idx_to_template_coords: Map<number, [number, number]>;
     template_coords_to_facet_idx: Map<string, number>; // string is the representation of the coordinates so we can use it as a key
+    edge_idx_to_connected_facets: Map<number, [number, number]>; // edge index to indices of the two connected facets
 
     // objects
     prime_mesh_to_facet_idx: Map<THREE.Mesh, number>; // used to link based on which object the orbital pointer touches
@@ -90,8 +91,7 @@ class BuildThingScene {
     fold_initial_facet_idx: number = -1; // The index of the initially touched facet at the start of a fold
     fold_initial_edge_idx: number = -1; // The index of the edge that the fold starts from
     fold_sign: -1 | 1 | null = null; // Whether the fold is in the positive direction or negative direction
-    active_layers_near_idx: number = -1; // The index (inclusive) of the layer closest to the camera that is a part of the current fold process
-    active_layers_far_idx: number = -1; // The index (inclusive) of the layer farthest from the camera that is a part of the current fold process
+    active_facets: Set<number> = null; // The set of indices of the facets that are allowed to participate in the fold
 
     // fold tracking geometry
     from_point = new THREE.Vector3(); // The point on the facet that the fold starts from
@@ -146,10 +146,6 @@ class BuildThingScene {
         this.disable_clipping_planes();
 
         // setup the material factories
-        // if (material_factories && material_factories.length < 2) {
-        //     console.error('Must provide at least 2 material factories for front and back sides');
-        //     material_factories = undefined;
-        // }
         if (material_factories !== undefined && material_factories.length > 0) {
             this.material_factories = material_factories;
         } else {
@@ -189,7 +185,8 @@ class BuildThingScene {
         const group = new THREE.Group();
         const facets: Facet[] = [];
         const edges: Edge[] = [];
-        const coords: [number, number][] = [];
+        const facet_coords: [number, number][] = [];
+        const edge_coords: [number, number, number, number][] = [];
         thing_t.forEach((layer, i) =>
             layer.forEach((facet_t, j) => {
                 const f = new Facet({
@@ -200,19 +197,19 @@ class BuildThingScene {
                     clipping_planes
                 });
                 facets.push(f);
-                coords.push([i, j]);
+                facet_coords.push([i, j]);
                 group.add(f.mesh);
                 group.add(f.lines);
 
                 // handle any edge links
-                facet_t.links.forEach((link, j) => {
+                facet_t.links.forEach((link, k) => {
                     if (link === null) return;
                     const [layer_offset, facet_index, edge_index] = link;
                     if (layer_offset < 0) return; // only handle positive direction links since there are 2 copies (one for positive, and one for negative)
 
                     const edge = new Edge({
-                        p0: facet_t.vertices[j],
-                        p1: facet_t.vertices[(j + 1) % facet_t.vertices.length],
+                        p0: facet_t.vertices[k],
+                        p1: facet_t.vertices[(k + 1) % facet_t.vertices.length],
                         thickness: layer_offset * this.layer_thickness,
                         z_offset: i * this.layer_thickness,
                         color: this.face_color,
@@ -220,23 +217,36 @@ class BuildThingScene {
                         clipping_planes
                     });
                     edges.push(edge);
+                    edge_coords.push([i, j, i+layer_offset, facet_index]);
                     group.add(edge.mesh);
                     group.add(edge.lines);
                 });
             })
         );
 
+        //TODO: break this out into separate function
         // for the prime version, save its facets and edges to the class
         if (is_prime) {
             this.prime_facets = facets;
             this.prime_edges = edges;
+            
+            // set up the mapping from facet to coordinates in the template
             this.prime_mesh_to_facet_idx = new Map<THREE.Mesh, number>();
             this.facet_idx_to_template_coords = new Map<number, [number, number]>();
             this.template_coords_to_facet_idx = new Map<string, number>();
             facets.forEach((f, i) => {
                 this.prime_mesh_to_facet_idx.set(f.mesh, i);
-                this.facet_idx_to_template_coords.set(i, coords[i]);
-                this.template_coords_to_facet_idx.set(hash_coord(coords[i]), i);
+                this.facet_idx_to_template_coords.set(i, facet_coords[i]);
+                this.template_coords_to_facet_idx.set(hash_coord(facet_coords[i]), i);
+            });
+
+            // set up the mapping from edge indices to the connected facets
+            this.edge_idx_to_connected_facets = new Map<number, [number, number]>();
+            edges.forEach((e, i) => {
+                const [layer0_idx, facet0_idx, layer1_idx, facet1_idx] = edge_coords[i];
+                const linear_facet0_idx = this.template_coords_to_facet_idx.get(hash_coord([layer0_idx, facet0_idx]));
+                const linear_facet1_idx = this.template_coords_to_facet_idx.get(hash_coord([layer1_idx, facet1_idx]));
+                this.edge_idx_to_connected_facets.set(i, [linear_facet0_idx, linear_facet1_idx]);
             });
         } else {
             this.copy_facets = facets;
@@ -312,7 +322,14 @@ class BuildThingScene {
         this.fold_initial_edge_idx = bestEdgeIdx;
     };
 
-    determine_active_facet_layers = () => {
+    determine_active_facets = () => {
+        this.active_facets = new Set<number>();
+
+        //DEBUG: for now, the only active facet is the one initially touched
+        this.active_facets.add(this.fold_initial_facet_idx);
+        console.log('active facets', this.active_facets);
+        return;
+
         /**
         Algorithm:
         - start at the initial facet/edge
@@ -326,7 +343,8 @@ class BuildThingScene {
 
         // TODO: this needs a better conception of which edges are obstacles, and which are picked up and included in the fold...
         //       as is, we either grab too many layers (going through obstacles) or not enough (filtering out valid traversals)
-
+        
+        /* OLD VERSION using layers. probably keep DFS, but reimplement with active_facet set rather than layer index
         const frontier: [number, number, number][] = []; // [layer_idx, facet_idx, edge_idx]
         const visited_id = new Set<string>(); // to avoid cycles
 
@@ -422,25 +440,30 @@ class BuildThingScene {
 
         console.log('active_layers_near_idx', this.active_layers_near_idx);
         console.log('active_layers_far_idx', this.active_layers_far_idx);
+        */
     };
 
     /** */
-    hide_facets_below_active_layer = (facets: Facet[], edges: Edge[]) => {
+    hide_inactive_facets = (facets: Facet[], edges: Edge[]) => {
         // const facet = this.prime_facets[this.fold_facet_idx];
         // this.fold_sign // direction to go in layers
         // const [i, j] = this.facet_idx_to_template_coords.get(this.fold_initial_facet_idx);
         // console.log('hide_facets_below_active_layer', i, j);
         // console.log('hide_facets_below_active_layer');
         facets.forEach((f, idx) => {
-            const [layer_idx, facet_idx] = this.facet_idx_to_template_coords.get(idx);
-            const visible = this.fold_sign * (layer_idx - this.active_layers_near_idx) > 0;
+            // const [layer_idx, facet_idx] = this.facet_idx_to_template_coords.get(idx);
+            // const linear_idx = this.template_coords_to_facet_idx.get(hash_coord([layer_idx, facet_idx]));
+            const visible = this.active_facets.has(idx); //this.fold_sign * (layer_idx - this.active_layers_near_idx) > 0;
             f.mesh.visible = visible;
             f.lines.visible = visible;
         });
-        facets[this.fold_initial_facet_idx].mesh.visible = true; // always show the initial facet
-        facets[this.fold_initial_facet_idx].lines.visible = true; // always show the initial facet
+        // facets[this.fold_initial_facet_idx].mesh.visible = true; // always show the initial facet
+        // facets[this.fold_initial_facet_idx].lines.visible = true; // always show the initial facet
         edges.forEach((e, idx) => {
-            //TBD how to determine visibility of edges...
+            const [facet0_idx, facet1_idx] = this.edge_idx_to_connected_facets.get(idx);
+            const visible = this.active_facets.has(facet0_idx) && this.active_facets.has(facet1_idx);
+            e.mesh.visible = visible;
+            e.lines.visible = visible;
         });
 
     };
@@ -694,8 +717,8 @@ class BuildThingScene {
         this.fold_initial_facet_idx = this.prime_mesh_to_facet_idx.get(this.controls.touchMesh);
         this.determine_fold_sign();
         this.determine_fold_from_point();
-        this.determine_active_facet_layers();
-        this.hide_facets_below_active_layer(this.copy_facets, this.prime_edges);
+        this.determine_active_facets();
+        this.hide_inactive_facets(this.copy_facets, this.copy_edges);
         //TODO: hide prime layers
         //TODO: hide other copy layers
 
@@ -714,8 +737,7 @@ class BuildThingScene {
     on_release = () => {
         this.fold_initial_facet_idx = -1;
         this.fold_initial_edge_idx = -1;
-        this.active_layers_near_idx = -1;
-        this.active_layers_far_idx = -1;
+        this.active_facets = null;
         this.fold_sign = null;
         this.copy_group.visible = false;
         this.disable_clipping_planes();
