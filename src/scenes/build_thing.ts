@@ -69,7 +69,7 @@ class BuildThingScene {
 
     // clipping planes
     prime_clip_planes: THREE.Plane[] = [];
-    copy_clip_planes: THREE.Plane[] = [];
+    reverse_clip_planes: THREE.Plane[] = [];
 
     // template of the current thing
     thing_t: ThingTemplate;
@@ -79,12 +79,18 @@ class BuildThingScene {
 
     // objects
     prime_mesh_to_facet_idx: Map<THREE.Mesh, number>; // used to link based on which object the orbital pointer touches
+    // prime object doesn't move
     prime_facets: Facet[];
     prime_edges: Edge[];
     prime_group: THREE.Group;
+    // copy object moves across fold axis
     copy_facets: Facet[];
     copy_edges: Edge[];
     copy_group: THREE.Group;
+    // copy 2 is static, and shows any part of prime that is hidden by clipping planes
+    copy2_facets: Facet[];
+    copy2_edges: Edge[];
+    copy2_group: THREE.Group;
     active_edge: Edge | null = null; // so we can draw the edge currently being folded
 
     // fold tracking parameters
@@ -142,7 +148,7 @@ class BuildThingScene {
         this.renderer.localClippingEnabled = true;
         this.renderer.clippingPlanes = []; // all clipping planes will be local to the object
         this.prime_clip_planes.push(new THREE.Plane(new THREE.Vector3(0, 1, 0).normalize(), 0));
-        this.copy_clip_planes.push(new THREE.Plane(new THREE.Vector3(0, 1, 0).normalize(), 0));
+        this.reverse_clip_planes.push(new THREE.Plane(new THREE.Vector3(0, -1, 0).normalize(), 0));
         this.disable_clipping_planes();
 
         // setup the material factories
@@ -181,7 +187,7 @@ class BuildThingScene {
         });
     }
 
-    construct_thing = (thing_t: ThingTemplate, clipping_planes: THREE.Plane[], is_prime: boolean): THREE.Group => {
+    construct_thing = (thing_t: ThingTemplate, clipping_planes: THREE.Plane[], which: 'prime'|'copy'|'copy2'): THREE.Group => {
         const group = new THREE.Group();
         const facets: Facet[] = [];
         const edges: Edge[] = [];
@@ -226,7 +232,7 @@ class BuildThingScene {
 
         //TODO: break this out into separate function
         // for the prime version, save its facets and edges to the class
-        if (is_prime) {
+        if (which === 'prime') {
             this.prime_facets = facets;
             this.prime_edges = edges;
             
@@ -248,9 +254,12 @@ class BuildThingScene {
                 const linear_facet1_idx = this.template_coords_to_facet_idx.get(hash_coord([layer1_idx, facet1_idx]));
                 this.edge_idx_to_connected_facets.set(i, [linear_facet0_idx, linear_facet1_idx]);
             });
-        } else {
+        } else if (which === 'copy') {
             this.copy_facets = facets;
             this.copy_edges = edges;
+        } else if (which === 'copy2') {
+            this.copy2_facets = facets;
+            this.copy2_edges = edges;
         }
 
         return group;
@@ -266,13 +275,16 @@ class BuildThingScene {
         }
 
         // construct the group and the copy
-        this.prime_group = this.construct_thing(thing_t, this.prime_clip_planes, true);
-        this.copy_group = this.construct_thing(thing_t, this.copy_clip_planes, false);
+        this.prime_group = this.construct_thing(thing_t, this.prime_clip_planes, 'prime');
+        this.copy_group = this.construct_thing(thing_t, this.prime_clip_planes, 'copy');
+        this.copy2_group = this.construct_thing(thing_t, this.reverse_clip_planes, 'copy2');
 
         // add the group and the copy to the scene
         this.scene.add(this.prime_group);
         this.scene.add(this.copy_group);
+        this.scene.add(this.copy2_group);
         this.copy_group.visible = false;
+        this.copy2_group.visible = false;
     };
 
     // only call on initial press
@@ -444,7 +456,7 @@ class BuildThingScene {
     };
 
     /** */
-    hide_inactive_facets = (facets: Facet[], edges: Edge[]) => {
+    hide_inactive_facets = (facets: Facet[], edges: Edge[], invert:boolean=false) => {
         // const facet = this.prime_facets[this.fold_facet_idx];
         // this.fold_sign // direction to go in layers
         // const [i, j] = this.facet_idx_to_template_coords.get(this.fold_initial_facet_idx);
@@ -453,7 +465,8 @@ class BuildThingScene {
         facets.forEach((f, idx) => {
             // const [layer_idx, facet_idx] = this.facet_idx_to_template_coords.get(idx);
             // const linear_idx = this.template_coords_to_facet_idx.get(hash_coord([layer_idx, facet_idx]));
-            const visible = this.active_facets.has(idx); //this.fold_sign * (layer_idx - this.active_layers_near_idx) > 0;
+            let visible = this.active_facets.has(idx); //this.fold_sign * (layer_idx - this.active_layers_near_idx) > 0;
+            visible = invert ? !visible : visible;
             f.mesh.visible = visible;
             f.lines.visible = visible;
         });
@@ -461,7 +474,8 @@ class BuildThingScene {
         // facets[this.fold_initial_facet_idx].lines.visible = true; // always show the initial facet
         edges.forEach((e, idx) => {
             const [facet0_idx, facet1_idx] = this.edge_idx_to_connected_facets.get(idx);
-            const visible = this.active_facets.has(facet0_idx) && this.active_facets.has(facet1_idx);
+            let visible = this.active_facets.has(facet0_idx) && this.active_facets.has(facet1_idx);
+            visible = invert ? !visible : visible;
             e.mesh.visible = visible;
             e.lines.visible = visible;
         });
@@ -603,14 +617,15 @@ class BuildThingScene {
         const constant = -this.mid_point.dot(fold_dir);
         this.prime_clip_planes[0].normal.copy(fold_dir);
         this.prime_clip_planes[0].constant = constant;
-        this.copy_clip_planes[0].normal.copy(fold_dir);
-        this.copy_clip_planes[0].constant = constant;
+        this.reverse_clip_planes[0].normal.copy(fold_dir);
+        this.reverse_clip_planes[0].normal.negate();
+        this.reverse_clip_planes[0].constant = -constant;
     };
 
     disable_clipping_planes = () => {
         //just set the constant to a large number to disable clipping
         this.prime_clip_planes[0].constant = 1000;
-        this.copy_clip_planes[0].constant = 1000;
+        this.reverse_clip_planes[0].constant = -1000;
     };
 
     update_active_edge = () => {
@@ -726,6 +741,7 @@ class BuildThingScene {
 
         // show the copy_group
         this.copy_group.visible = true;
+        this.copy2_group.visible = true;
 
         //determine the facet that is the root of the fold
         this.fold_initial_facet_idx = this.prime_mesh_to_facet_idx.get(this.controls.touchMesh);
@@ -733,8 +749,7 @@ class BuildThingScene {
         this.determine_fold_from_point();
         this.determine_active_facets();
         this.hide_inactive_facets(this.copy_facets, this.copy_edges);
-        //TODO: hide prime layers
-        //TODO: hide other copy layers
+        this.hide_inactive_facets(this.copy2_facets, this.copy2_edges, true);
 
         // update geometry based on the current state of the fold
         this.on_move();
