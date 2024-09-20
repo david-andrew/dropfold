@@ -91,21 +91,21 @@ export const states: ThingTemplate[] = [
         ],
         [
             {
-                vertices: [[-4.25, 1.25], [0, 1.25], [0, -3]],
-                links: [null, null, [1, 0, 2]],
-                transform: [0, 0, 0]
+                vertices: [[-4.25, 1.25], [0, 5.5], [-4.25, 5.5]],
+                links: [[-1, 0, 0], null, null],
+                transform: [-5.5, -3, 3*PI/2]
             },
             {
-                vertices: [[0, -3], [0, 1.25], [4.25, 1.25]],
-                links: [null, null, [1, 0, 1]],
-                transform: [0, 0, 0]
+                vertices: [[0, 5.5], [4.25, 5.5], [4.25, 1.25]],
+                links: [null, null, [-1, 0, 1]],
+                transform: [5.5,-3,PI/2]
             }
         ],
         [
             {
-                vertices: [[-4.25, 1.25], [4.25, 1.25], [0, -3]],
+                vertices: [[-4.25, 1.25], [4.25, 1.25], [0, 5.5]],
                 links: [[-2, 0, 0], [-1, 1, 2], [-1, 0, 2]],
-                transform: [0, 0, 0]
+                transform: [0, 2.5, -2*PI]
             }
         ]
     ]
@@ -113,9 +113,9 @@ export const states: ThingTemplate[] = [
 
 
 /**
- * Convert the compact transformation representation [dx, dy, angle/mirror] to a 3x3 transformation matrix.
+ * Convert the compact transformation representation [dx, dy, angle/mirror] to a 4x4 transformation matrix.
  * @param vec - The transformation vector [dx, dy, angle/mirror].
- * @returns A THREE.Matrix3 representing the transformation matrix.
+ * @returns A THREE.Matrix4 representing the transformation matrix.
  */
 export const tf_vec_to_mat = (vec: [number, number, number]): THREE.Matrix4 => {
     const [dx, dy, angle_mirror] = vec;
