@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { clamp } from 'three/src/math/MathUtils.js';
 
 import { SceneFunctions } from '../main';
-import { states as paper_plane_states, ThingTemplate } from './test_paper_plane';
+import { states as paper_plane_states, tf_vec_to_mat, ThingTemplate } from './test_paper_plane';
+// import { recover_transform } from './figure_out_transform';
 import { OrbitalPointer } from '../controls';
 import { setup_debug_geometry, hash_coord, getLineIntersection, getLineCircleIntersections, shrinkPolygon, pmod } from '../utils';
 import { MaterialFactory, MaterialProps, harlequin_circles, seigaiha } from './shader_textures';
@@ -32,11 +33,21 @@ export const build_thing_scene =
 export const build_thing_from_seed =
     (verts: [number, number][]) =>
     (renderer: THREE.WebGLRenderer): SceneFunctions => {
-        const thing_t: ThingTemplate = [[{ vertices: verts, links: verts.map((_) => null) }]];
+        const thing_t: ThingTemplate = [[{ vertices: verts, links: verts.map((_) => null), transform: [0, 0, 0] }]];
         return build_thing_scene(thing_t)(renderer);
     };
 
 export const paper_plane_scene = (renderer: THREE.WebGLRenderer): SceneFunctions => {
+    //DEBUG testing recover transform
+    // const to_vec2 = (ps: number[][]) => ps.map((p) => new THREE.Vector2(p[0], p[1]));
+    // const P0s = [[-4.25, 1.25], [0, 5.5], [-4.25, 5.5]]
+    // // const P0s = [[-5.25, 1.25], [-1, 5.5], [-1, 1.25]]
+    // const P1s = [[-4.25, 1.25], [ 0, 5.5], [ 0, 1.25]]
+    // console.log('recover_transform', recover_transform(to_vec2(P0s), to_vec2(P1s)));
+    // console.log('tfmat', tf_vec_to_mat([-5.5, 5.5, -Math.PI/2]))
+
+
+
     return build_thing_scene(paper_plane_states[2])(renderer);
 };
 
@@ -195,8 +206,10 @@ class BuildThingScene {
         const edge_coords: [number, number, number, number][] = [];
         thing_t.forEach((layer, i) =>
             layer.forEach((facet_t, j) => {
+                const planar_tf = tf_vec_to_mat(facet_t.transform);                
                 const f = new Facet({
                     vertices: facet_t.vertices,
+                    planar_tf,
                     z_offset: i * this.layer_thickness,
                     material_factories: this.material_factories,
                     edge_color: this.edge_color,
@@ -213,9 +226,14 @@ class BuildThingScene {
                     const [layer_offset, facet_index, edge_index] = link;
                     if (layer_offset < 0) return; // only handle positive direction links since there are 2 copies (one for positive, and one for negative)
 
+                    // determine the correct 2D coordinates for the edge
+                    const p0_2d = f.vertices[k]
+                    const p1_2d = f.vertices[(k + 1) % f.vertices.length]
+                    const p0_3d = new THREE.Vector3(p0_2d.x, p0_2d.y, 0).applyMatrix4(f.mesh.matrixWorld);
+                    const p1_3d = new THREE.Vector3(p1_2d.x, p1_2d.y, 0).applyMatrix4(f.mesh.matrixWorld);
                     const edge = new Edge({
-                        p0: facet_t.vertices[k],
-                        p1: facet_t.vertices[(k + 1) % facet_t.vertices.length],
+                        p0: [p0_3d.x, p0_3d.y],
+                        p1: [p1_3d.x, p1_3d.y],
                         thickness: layer_offset * this.layer_thickness,
                         z_offset: i * this.layer_thickness,
                         color: this.face_color,
@@ -794,7 +812,8 @@ class BuildThingScene {
 
 type FacetProps = {
     vertices: Array<[number, number]>;
-    z_offset?: number;
+    planar_tf: THREE.Matrix4;
+    z_offset: number;
     // color: THREE.ColorRepresentation;
     material_factories: MaterialFactory[];
     edge_color: THREE.ColorRepresentation;
@@ -806,7 +825,7 @@ class Facet {
     mesh: THREE.Mesh;
     lines: Line2; // THREE.LineSegments;
 
-    constructor({ vertices, z_offset = 0.0, material_factories, edge_color, clipping_planes }: FacetProps) {
+    constructor({ vertices, planar_tf, z_offset, material_factories, edge_color, clipping_planes }: FacetProps) {
         // make the mesh
         this.vertices = vertices.map(([x, y]) => new THREE.Vector2(x, y));
         const shape = new THREE.Shape(this.vertices);
@@ -816,8 +835,17 @@ class Facet {
         geometry.addGroup(0, geometry.attributes.position.count * 2, 0);
         geometry.addGroup(0, geometry.attributes.position.count * 2, 1);
         const materials = material_factories.map((factory) => factory({clippingPlanes: clipping_planes}));
+        
+        // create the mesh, and transform according to the planar transform and z_offset
         this.mesh = new THREE.Mesh(geometry, materials.length > 1 ? materials: materials[0]);
+        this.mesh.applyMatrix4(planar_tf);
         this.mesh.position.z = z_offset;
+
+        // apply the planar transform to the vertices (in 2D) for the edge vertices
+        const vertices3 = this.vertices.map((v) => new THREE.Vector3(v.x, v.y, z_offset));
+        vertices3.forEach((v) => v.applyMatrix4(planar_tf));
+        vertices3.forEach((v) => v.z = z_offset); // reset z to z_offset
+        vertices3.push(vertices3[0]); // close the shape
 
 
         // // make the lines
@@ -828,7 +856,7 @@ class Facet {
 
         // make the lines with Line2
         const lineGeometry = new LineGeometry();
-        lineGeometry.setPositions([...this.vertices, this.vertices[0]].map((v) => [v.x, v.y, z_offset]).flat());
+        lineGeometry.setPositions([...vertices3.map((v) => [v.x, v.y, z_offset]).flat()]); //([...this.vertices, this.vertices[0]].map((v) => [v.x, v.y, z_offset]).flat());
         const lineMaterial = new LineMaterial({ color: edge_color, linewidth: 2, clippingPlanes: clipping_planes });
         lineMaterial.resolution.set(window.innerWidth, window.innerHeight);
         this.lines = new Line2(lineGeometry, lineMaterial);
