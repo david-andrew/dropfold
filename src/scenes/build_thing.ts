@@ -16,12 +16,12 @@ export const build_thing_scene =
     (thing_t: ThingTemplate) =>
     (renderer: THREE.WebGLRenderer): SceneFunctions => {
         const material_factories: MaterialFactory[] = [
-            (props: MaterialProps = {}) => seigaiha({ side: THREE.FrontSide, ...props}),
-            (props: MaterialProps = {}) => seigaiha({ side: THREE.BackSide, color1:0x000000, ...props}),
+            (props: MaterialProps = {}) => seigaiha({ side: THREE.FrontSide, ...props }),
+            (props: MaterialProps = {}) => seigaiha({ side: THREE.BackSide, color1: 0x000000, ...props })
             // (props: MaterialProps = {}) => harlequin_circles({ side: THREE.FrontSide, ...props}),
             // (props: MaterialProps = {}) => harlequin_circles({ side: THREE.BackSide, color0: 0x00ffff, ...props}),
             // (props: MaterialProps = {}) => new THREE.MeshBasicMaterial({ color: 0x2288ff, side: THREE.BackSide, ...props })
-        ]
+        ];
         const scene = new BuildThingScene({ thing_t, renderer, material_factories });
         return {
             update_scene: scene.update_scene,
@@ -45,8 +45,6 @@ export const paper_plane_scene = (renderer: THREE.WebGLRenderer): SceneFunctions
     // const P1s = [[-4.25, 1.25], [ 0, 5.5], [ 0, 1.25]]
     // console.log('recover_transform', recover_transform(to_vec2(P0s), to_vec2(P1s)));
     // console.log('tfmat', tf_vec_to_mat([-5.5, 5.5, -Math.PI/2]))
-
-
 
     return build_thing_scene(paper_plane_states[2])(renderer);
 };
@@ -146,7 +144,7 @@ class BuildThingScene {
         this.edge_color = edge_color;
         this.face_color = face_color;
         this.debug_geometry = debug_geometry;
-        this.shrink_workspaces = shrink_workspaces;        
+        this.shrink_workspaces = shrink_workspaces;
 
         // setup the scene
         this.renderer = renderer;
@@ -167,9 +165,11 @@ class BuildThingScene {
             this.material_factories = material_factories;
         } else {
             this.material_factories = [
-                (props: MaterialProps = {}) => new THREE.MeshBasicMaterial({ color: this.face_color, side: THREE.FrontSide, ...props }),
-                (props: MaterialProps = {}) => new THREE.MeshBasicMaterial({ color: this.face_color, side: THREE.BackSide, ...props })                        
-            ]
+                (props: MaterialProps = {}) =>
+                    new THREE.MeshBasicMaterial({ color: this.face_color, side: THREE.FrontSide, ...props }),
+                (props: MaterialProps = {}) =>
+                    new THREE.MeshBasicMaterial({ color: this.face_color, side: THREE.BackSide, ...props })
+            ];
         }
 
         // setup debug geometry
@@ -181,8 +181,12 @@ class BuildThingScene {
         this.rebuild_thing(this.thing_t);
 
         // // debug random offset and orientation
-        // this.prime_group.rotation.x = Math.PI / 4;
+        // this.prime_group.rotation.z = Math.PI / 4;
         // this.prime_group.position.y = 1;
+        // this.copy_group.rotation.z = Math.PI / 4;
+        // this.copy_group.position.y = 1;
+        // this.copy2_group.rotation.z = Math.PI / 4;
+        // this.copy2_group.position.y = 1;
 
         // set up controls
         this.controls = new OrbitalPointer({
@@ -198,7 +202,11 @@ class BuildThingScene {
         });
     }
 
-    construct_thing = (thing_t: ThingTemplate, clipping_planes: THREE.Plane[], which: 'prime'|'copy'|'copy2'): THREE.Group => {
+    construct_thing = (
+        thing_t: ThingTemplate,
+        clipping_planes: THREE.Plane[],
+        which: 'prime' | 'copy' | 'copy2'
+    ): THREE.Group => {
         const group = new THREE.Group();
         const facets: Facet[] = [];
         const edges: Edge[] = [];
@@ -206,7 +214,7 @@ class BuildThingScene {
         const edge_coords: [number, number, number, number][] = [];
         thing_t.forEach((layer, i) =>
             layer.forEach((facet_t, j) => {
-                const planar_tf = tf_vec_to_mat(facet_t.transform);                
+                const planar_tf = tf_vec_to_mat(facet_t.transform);
                 const f = new Facet({
                     vertices: facet_t.vertices,
                     planar_tf,
@@ -227,8 +235,8 @@ class BuildThingScene {
                     if (layer_offset < 0) return; // only handle positive direction links since there are 2 copies (one for positive, and one for negative)
 
                     // determine the correct 2D coordinates for the edge
-                    const p0_2d = f.vertices[k]
-                    const p1_2d = f.vertices[(k + 1) % f.vertices.length]
+                    const p0_2d = f.vertices2[k];
+                    const p1_2d = f.vertices2[(k + 1) % f.vertices2.length];
                     const p0_3d = new THREE.Vector3(p0_2d.x, p0_2d.y, 0).applyMatrix4(f.mesh.matrixWorld);
                     const p1_3d = new THREE.Vector3(p1_2d.x, p1_2d.y, 0).applyMatrix4(f.mesh.matrixWorld);
                     const edge = new Edge({
@@ -241,7 +249,7 @@ class BuildThingScene {
                         clipping_planes
                     });
                     edges.push(edge);
-                    edge_coords.push([i, j, i+layer_offset, facet_index]);
+                    edge_coords.push([i, j, i + layer_offset, facet_index]);
                     group.add(edge.mesh);
                     group.add(edge.lines);
                 });
@@ -253,7 +261,7 @@ class BuildThingScene {
         if (which === 'prime') {
             this.prime_facets = facets;
             this.prime_edges = edges;
-            
+
             // set up the mapping from facet to coordinates in the template
             this.prime_mesh_to_facet_idx = new Map<THREE.Mesh, number>();
             this.facet_idx_to_template_coords = new Map<number, [number, number]>();
@@ -321,7 +329,7 @@ class BuildThingScene {
 
         // Transform the 2D shape points to 3D
         const worldVertices: THREE.Vector3[] = [];
-        facet.vertices.forEach((vertex) => {
+        facet.vertices2.forEach((vertex) => {
             const vector3D = new THREE.Vector3(vertex.x, vertex.y, 0); // Convert 2D point to 3D by adding a z-value of 0
             vector3D.applyMatrix4(facet.mesh.matrixWorld); // Apply the mesh's world transformation matrix to get the 3D position
             worldVertices.push(vector3D);
@@ -355,6 +363,13 @@ class BuildThingScene {
     determine_active_facets = () => {
         this.active_facets = new Set<number>();
 
+        // //DEBUG: use every facet as active
+        // this.active_facets.add(0);
+        // this.active_facets.add(1);
+        // this.active_facets.add(2);
+        // this.active_facets.add(3);
+        // return;
+
         //DEBUG: for now, the only active facet is the one initially touched
         this.active_facets.add(this.fold_initial_facet_idx);
         console.log('active facets', this.active_facets);
@@ -373,7 +388,7 @@ class BuildThingScene {
 
         // TODO: this needs a better conception of which edges are obstacles, and which are picked up and included in the fold...
         //       as is, we either grab too many layers (going through obstacles) or not enough (filtering out valid traversals)
-        
+
         /* OLD VERSION using layers. probably keep DFS, but reimplement with active_facet set rather than layer index
         const frontier: [number, number, number][] = []; // [layer_idx, facet_idx, edge_idx]
         const visited_id = new Set<string>(); // to avoid cycles
@@ -474,7 +489,7 @@ class BuildThingScene {
     };
 
     /** */
-    hide_inactive_facets = (facets: Facet[], edges: Edge[], invert:boolean=false) => {
+    hide_inactive_facets = (facets: Facet[], edges: Edge[], invert: boolean = false) => {
         // const facet = this.prime_facets[this.fold_facet_idx];
         // this.fold_sign // direction to go in layers
         // const [i, j] = this.facet_idx_to_template_coords.get(this.fold_initial_facet_idx);
@@ -497,38 +512,33 @@ class BuildThingScene {
             e.mesh.visible = visible;
             e.lines.visible = visible;
         });
-
     };
 
     update_midpoint = () => {
         // update the midpoint based on the from_point and to_point
         this.mid_point.copy(this.from_point).lerp(this.to_point, 0.5);
-    }
+    };
 
-    fit_to_workspace_obstacles = () =>{
+    fit_to_workspace_obstacles = () => {
         // TODO: update this so it uses all the facets in the active layers, not just the initial one
 
         // iterate over all vertices of the facet to check if the to_point is within any of their workspaces
-        // convert from_point and to_point to the local space of the facet
-        const facet = this.prime_facets[this.fold_initial_facet_idx];
-        const inv_tf = facet.mesh.matrixWorld.clone().invert();
+        const inv_tf = this.prime_group.matrixWorld.clone().invert();
         let temp: THREE.Vector3;
         temp = this.from_point.clone().applyMatrix4(inv_tf);
         const original_local_from_point = new THREE.Vector2(temp.x, temp.y);
         temp = this.to_point.clone().applyMatrix4(inv_tf);
         const local_to_point = new THREE.Vector2(temp.x, temp.y);
 
-        
-        const original_vertices: THREE.Vector2[] = []
+        const original_vertices: THREE.Vector2[] = [];
         for (let facet_idx of this.active_facets) {
             const f = this.prime_facets[facet_idx];
-            for (let vertex of f.vertices) {
+            for (let vertex of f.vertices3) {
                 const v = new THREE.Vector2(vertex.x, vertex.y);
                 original_vertices.push(v);
             }
         }
 
-        
         let vertices: THREE.Vector2[];
         let local_from_point: THREE.Vector2;
         if (this.shrink_workspaces) {
@@ -584,18 +594,16 @@ class BuildThingScene {
         }
 
         temp = new THREE.Vector3(best_point.x, best_point.y, 0);
-        this.to_point.copy(temp.applyMatrix4(facet.mesh.matrixWorld));
+        this.to_point.copy(temp.applyMatrix4(this.prime_group.matrixWorld));
         this.mid_point.copy(this.from_point).lerp(this.to_point, 0.5);
     };
 
     fit_to_edge_obstacles = () => {
         //TODO
-    }
+    };
 
     // fit_to_over_under_edge_obstacles = () => {}
     // fit_to_etc_obstacles = () => {}
-
-
 
     // transform the copy_group across the fold
     transform_copy_group = () => {
@@ -695,7 +703,7 @@ class BuildThingScene {
 
         // Transform the 2D shape points to 3D
         const facet = this.prime_facets[this.fold_initial_facet_idx];
-        const shapeVertices = facet.vertices.map((v) => new THREE.Vector2(v.x, v.y));
+        const shapeVertices = facet.vertices2.map((v) => new THREE.Vector2(v.x, v.y));
 
         // convert the direction to 2D by projecting the line into the mesh's frame
         const inv_tf = facet.mesh.matrixWorld.clone().invert();
@@ -821,32 +829,31 @@ type FacetProps = {
 };
 
 class Facet {
-    vertices: THREE.Vector2[];
+    vertices2: THREE.Vector2[];
+    vertices3: THREE.Vector3[];
     mesh: THREE.Mesh;
     lines: Line2; // THREE.LineSegments;
 
     constructor({ vertices, planar_tf, z_offset, material_factories, edge_color, clipping_planes }: FacetProps) {
         // make the mesh
-        this.vertices = vertices.map(([x, y]) => new THREE.Vector2(x, y));
-        const shape = new THREE.Shape(this.vertices);
+        this.vertices2 = vertices.map(([x, y]) => new THREE.Vector2(x, y));
+        const shape = new THREE.Shape(this.vertices2);
         const geometry = new THREE.ShapeGeometry(shape);
         // adjust the geometry groups having multi-sided shader materials
         geometry.clearGroups();
         geometry.addGroup(0, geometry.attributes.position.count * 2, 0);
         geometry.addGroup(0, geometry.attributes.position.count * 2, 1);
-        const materials = material_factories.map((factory) => factory({clippingPlanes: clipping_planes}));
-        
+        const materials = material_factories.map((factory) => factory({ clippingPlanes: clipping_planes }));
+
         // create the mesh, and transform according to the planar transform and z_offset
-        this.mesh = new THREE.Mesh(geometry, materials.length > 1 ? materials: materials[0]);
+        this.mesh = new THREE.Mesh(geometry, materials.length > 1 ? materials : materials[0]);
         this.mesh.applyMatrix4(planar_tf);
         this.mesh.position.z = z_offset;
 
         // apply the planar transform to the vertices (in 2D) for the edge vertices
-        const vertices3 = this.vertices.map((v) => new THREE.Vector3(v.x, v.y, z_offset));
-        vertices3.forEach((v) => v.applyMatrix4(planar_tf));
-        vertices3.forEach((v) => v.z = z_offset); // reset z to z_offset
-        vertices3.push(vertices3[0]); // close the shape
-
+        this.vertices3 = this.vertices2.map((v) => new THREE.Vector3(v.x, v.y, 0));
+        this.vertices3.forEach((v) => v.applyMatrix4(planar_tf));
+        this.vertices3.forEach((v) => (v.z = z_offset)); // set z to z_offset
 
         // // make the lines
         // const lines = new THREE.EdgesGeometry(geometry);
@@ -856,7 +863,7 @@ class Facet {
 
         // make the lines with Line2
         const lineGeometry = new LineGeometry();
-        lineGeometry.setPositions([...vertices3.map((v) => [v.x, v.y, z_offset]).flat()]); //([...this.vertices, this.vertices[0]].map((v) => [v.x, v.y, z_offset]).flat());
+        lineGeometry.setPositions([...this.vertices3, this.vertices3[0]].map((v) => [v.x, v.y, v.z]).flat()); //([...this.vertices, this.vertices[0]].map((v) => [v.x, v.y, z_offset]).flat());
         const lineMaterial = new LineMaterial({ color: edge_color, linewidth: 2, clippingPlanes: clipping_planes });
         lineMaterial.resolution.set(window.innerWidth, window.innerHeight);
         this.lines = new Line2(lineGeometry, lineMaterial);
