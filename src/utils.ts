@@ -211,3 +211,118 @@ export const setup_debug_geometry = (scene: THREE.Scene, debug: boolean) => {
 
     return { hide_debug_geometry, show_debug_geometry };
 };
+
+/**
+ * Recovers the 3x3 homogeneous transformation matrix using least squares
+ * to estimate rotation, translation, and possibly mirroring between two sets of points.
+ *
+ * @param P0s - Array of initial points (at least 3) in THREE.Vector2
+ * @param P1s - Array of transformed points corresponding to P0s in THREE.Vector2
+ * @returns THREE.Matrix3 representing the transformation matrix
+ */
+export const recover_transform = (P0s: THREE.Vector2[], P1s: THREE.Vector2[]): THREE.Matrix3 => {
+    if (P0s.length !== P1s.length || P0s.length < 3) {
+        throw new Error('Both point sets must have the same number of points and at least 3 points.');
+    }
+
+    const n = P0s.length;
+
+    // Building the matrices for the least squares system
+    const A = new Array(n * 2).fill(null).map(() => new Array(6).fill(0));
+    const B = new Array(n * 2).fill(0);
+
+    for (let i = 0; i < n; i++) {
+        const P0 = P0s[i];
+        const P1 = P1s[i];
+
+        // Filling the matrix for the least squares system
+        A[2 * i] = [P0.x, P0.y, 1, 0, 0, 0];
+        A[2 * i + 1] = [0, 0, 0, P0.x, P0.y, 1];
+
+        // Fill the corresponding B vector (target)
+        B[2 * i] = P1.x;
+        B[2 * i + 1] = P1.y;
+    }
+
+    // Now solve for the least squares solution
+    // A * x = B, where x = [a, b, tx, c, d, ty]
+    const AT = transposeMatrix(A);
+    const ATA = multiplyMatrices(AT, A);
+    const ATB = multiplyMatrixVector(AT, B);
+    const x = solveLinearSystem(ATA, ATB);
+
+    // Build the 3x3 matrix from the solution vector
+    const resultMatrix = new THREE.Matrix3();
+    resultMatrix.set(x[0], x[1], x[2], x[3], x[4], x[5], 0, 0, 1);
+
+    return resultMatrix;
+};
+
+/**
+ * Transposes a matrix.
+ */
+const transposeMatrix = (matrix: number[][]): number[][] => {
+    return matrix[0].map((_, colIndex) => matrix.map((row) => row[colIndex]));
+};
+
+/**
+ * Multiplies two matrices.
+ */
+const multiplyMatrices = (A: number[][], B: number[][]): number[][] => {
+    const result = new Array(A.length).fill(null).map(() => new Array(B[0].length).fill(0));
+    for (let i = 0; i < A.length; i++) {
+        for (let j = 0; j < B[0].length; j++) {
+            result[i][j] = A[i].reduce((sum, el, k) => sum + el * B[k][j], 0);
+        }
+    }
+    return result;
+};
+
+/**
+ * Multiplies a matrix with a vector.
+ */
+const multiplyMatrixVector = (A: number[][], B: number[]): number[] => {
+    return A.map((row) => row.reduce((sum, el, i) => sum + el * B[i], 0));
+};
+
+/**
+ * Solves a linear system of equations Ax = B using Gaussian elimination.
+ * This is a helper function to solve for x in the least squares method.
+ */
+const solveLinearSystem = (A: number[][], B: number[]): number[] => {
+    const n = A.length;
+    const augmentedMatrix = A.map((row, i) => [...row, B[i]]);
+
+    // Gaussian elimination
+    for (let i = 0; i < n; i++) {
+        // Find pivot row
+        let maxRow = i;
+        for (let k = i + 1; k < n; k++) {
+            if (Math.abs(augmentedMatrix[k][i]) > Math.abs(augmentedMatrix[maxRow][i])) {
+                maxRow = k;
+            }
+        }
+
+        // Swap rows
+        [augmentedMatrix[i], augmentedMatrix[maxRow]] = [augmentedMatrix[maxRow], augmentedMatrix[i]];
+
+        // Make all rows below this one 0 in the current column
+        for (let k = i + 1; k < n; k++) {
+            const factor = augmentedMatrix[k][i] / augmentedMatrix[i][i];
+            for (let j = i; j < n + 1; j++) {
+                augmentedMatrix[k][j] -= factor * augmentedMatrix[i][j];
+            }
+        }
+    }
+
+    // Back substitution
+    const x = new Array(n).fill(0);
+    for (let i = n - 1; i >= 0; i--) {
+        x[i] = augmentedMatrix[i][n] / augmentedMatrix[i][i];
+        for (let k = i - 1; k >= 0; k--) {
+            augmentedMatrix[k][n] -= augmentedMatrix[k][i] * x[i];
+        }
+    }
+
+    return x;
+};

@@ -496,11 +496,10 @@ class BuildThingScene {
         this.facet_edge_obstacles = [];
         this.overhang_edge_obstacles = [];
 
-
         // determining plain workspace obstacles (i.e. all vertices of the active facets)
         this.active_facets.forEach((facet_idx) => {
             const f = this.prime_facets[facet_idx];
-            
+
             // if set, shrink the vertices of the facet a smidge
             const original_vertices: THREE.Vector2[] = f.vertices3.map((v) => new THREE.Vector2(v.x, v.y));
             const vertices: THREE.Vector2[] = this.shrink_workspaces ? shrinkPolygon(original_vertices, 0.95) : original_vertices;
