@@ -495,6 +495,20 @@ class BuildThingScene {
         this.workspace_point_obstacles = [];
         this.facet_edge_obstacles = [];
         this.overhang_edge_obstacles = [];
+
+
+        // determining plain workspace obstacles (i.e. all vertices of the active facets)
+        this.active_facets.forEach((facet_idx) => {
+            const f = this.prime_facets[facet_idx];
+            
+            // if set, shrink the vertices of the facet a smidge
+            const original_vertices: THREE.Vector2[] = f.vertices3.map((v) => new THREE.Vector2(v.x, v.y));
+            const vertices: THREE.Vector2[] = this.shrink_workspaces ? shrinkPolygon(original_vertices, 0.95) : original_vertices;
+            this.workspace_point_obstacles.push(...vertices);
+        });
+
+        // TODO: determine facet edge obstacles
+        // TODO: determine overhang edge obstacles
     };
 
     /** */
@@ -520,39 +534,14 @@ class BuildThingScene {
     };
 
     fit_to_workspace_obstacles = () => {
-        // TODO: update this so it uses all the facets in the active layers, not just the initial one
-
-        // iterate over all vertices of the facet to check if the to_point is within any of their workspaces
+        // convert the from_point and to_point to 2D local coordinates
         const inv_tf = this.prime_group.matrixWorld.clone().invert();
         let temp: THREE.Vector3;
         temp = this.from_point.clone().applyMatrix4(inv_tf);
-        const original_local_from_point = new THREE.Vector2(temp.x, temp.y);
+        const local_from_point = new THREE.Vector2(temp.x, temp.y);
         temp = this.to_point.clone().applyMatrix4(inv_tf);
         const local_to_point = new THREE.Vector2(temp.x, temp.y);
 
-        const original_vertices: THREE.Vector2[] = [];
-        for (let facet_idx of this.active_facets) {
-            const f = this.prime_facets[facet_idx];
-            for (let vertex of f.vertices3) {
-                const v = new THREE.Vector2(vertex.x, vertex.y);
-                original_vertices.push(v);
-            }
-        }
-
-        let vertices: THREE.Vector2[];
-        let local_from_point: THREE.Vector2;
-        if (this.shrink_workspaces) {
-            // shrink the vertices of the facet a smidge
-            [vertices, [local_from_point]] = shrinkPolygon(original_vertices, 0.95, [original_local_from_point]);
-
-            // insert an extra point into vertices to prevent the singularity around the from_point
-            // still not perfect, but works well enough for now. Intersections between the workspaces of the two vertices on the active edge and this workspace is too sharp
-            // To fix, consider using sdf with smooth combination of the workspaces (and maybe removing/adjusting this extra point)
-            vertices.push(local_from_point.clone().lerp(original_local_from_point, 2));
-        } else {
-            vertices = original_vertices;
-            local_from_point = original_local_from_point;
-        }
         // best point shifted directly along the drag direction
         let best_shift = Infinity;
         let best_point: THREE.Vector2 | null = null;
@@ -562,7 +551,7 @@ class BuildThingScene {
         let okay_point: THREE.Vector2 | null = null;
 
         // find the best point and okay point
-        for (let vertex of vertices) {
+        for (let vertex of this.workspace_point_obstacles) {
             const workspace_radius = vertex.distanceTo(local_from_point);
             const distance_from_vertex = local_to_point.distanceTo(vertex);
             if (distance_from_vertex < workspace_radius) {
@@ -588,7 +577,7 @@ class BuildThingScene {
             }
         }
 
-        // no intersections found
+        // if no intersections found, use the okay point
         if (best_point === null) {
             best_point = okay_point;
         }
@@ -833,8 +822,8 @@ type FacetProps = {
 };
 
 class Facet {
-    vertices2: THREE.Vector2[];
-    vertices3: THREE.Vector3[];
+    vertices2: THREE.Vector2[]; // the original points of the facet, completely untransformed (i.e. location in unfolded paper)
+    vertices3: THREE.Vector3[]; // the vertices transformed to their specified fold location (i.e. location in folded paper). Can be 2D or 3D, Z is just the z_offset
     mesh: THREE.Mesh;
     lines: Line2; // THREE.LineSegments;
 
