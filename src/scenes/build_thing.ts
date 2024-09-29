@@ -107,6 +107,9 @@ class BuildThingScene {
     fold_initial_edge_idx: number = -1; // The index of the edge that the fold starts from
     fold_sign: -1 | 1 | null = null; // Whether the fold is in the positive direction or negative direction
     active_facets: Set<number> = null; // The set of indices of the facets that are allowed to participate in the fold
+    workspace_point_obstacles: THREE.Vector2[] = []; // The vertices of the facets that are obstacles to the fold
+    facet_edge_obstacles: [THREE.Vector2, THREE.Vector2][] = []; // The edges of the facets that are obstacles to the fold
+    overhang_edge_obstacles: [THREE.Vector2, THREE.Vector2][] = []; // overhanging edges that are obstacles to the fold
 
     // fold tracking geometry
     from_point = new THREE.Vector3(); // The point on the facet that the fold starts from
@@ -488,23 +491,20 @@ class BuildThingScene {
         */
     };
 
+    determine_obstacles = () => {
+        this.workspace_point_obstacles = [];
+        this.facet_edge_obstacles = [];
+        this.overhang_edge_obstacles = [];
+    };
+
     /** */
     hide_inactive_facets = (facets: Facet[], edges: Edge[], invert: boolean = false) => {
-        // const facet = this.prime_facets[this.fold_facet_idx];
-        // this.fold_sign // direction to go in layers
-        // const [i, j] = this.facet_idx_to_template_coords.get(this.fold_initial_facet_idx);
-        // console.log('hide_facets_below_active_layer', i, j);
-        // console.log('hide_facets_below_active_layer');
         facets.forEach((f, idx) => {
-            // const [layer_idx, facet_idx] = this.facet_idx_to_template_coords.get(idx);
-            // const linear_idx = this.template_coords_to_facet_idx.get(hash_coord([layer_idx, facet_idx]));
-            let visible = this.active_facets.has(idx); //this.fold_sign * (layer_idx - this.active_layers_near_idx) > 0;
+            let visible = this.active_facets.has(idx);
             visible = invert ? !visible : visible;
             f.mesh.visible = visible;
             f.lines.visible = visible;
         });
-        // facets[this.fold_initial_facet_idx].mesh.visible = true; // always show the initial facet
-        // facets[this.fold_initial_facet_idx].lines.visible = true; // always show the initial facet
         edges.forEach((e, idx) => {
             const [facet0_idx, facet1_idx] = this.edge_idx_to_connected_facets.get(idx);
             let visible = this.active_facets.has(facet0_idx) && this.active_facets.has(facet1_idx);
@@ -774,6 +774,7 @@ class BuildThingScene {
         this.determine_fold_sign();
         this.determine_fold_from_point();
         this.determine_active_facets();
+        this.determine_obstacles();
         this.hide_inactive_facets(this.copy_facets, this.copy_edges);
         this.hide_inactive_facets(this.copy2_facets, this.copy2_edges, true);
 
@@ -793,6 +794,9 @@ class BuildThingScene {
         this.fold_initial_facet_idx = -1;
         this.fold_initial_edge_idx = -1;
         this.active_facets = null;
+        this.workspace_point_obstacles = null;
+        this.facet_edge_obstacles = null;
+        this.overhang_edge_obstacles = null;
         this.fold_sign = null;
         this.copy_group.visible = false;
         this.disable_clipping_planes();
