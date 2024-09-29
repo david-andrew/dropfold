@@ -46,7 +46,7 @@ export const paper_plane_scene = (renderer: THREE.WebGLRenderer): SceneFunctions
     // console.log('recover_transform', recover_transform(to_vec2(P0s), to_vec2(P1s)));
     // console.log('tfmat', tf_vec_to_mat([-5.5, 5.5, -Math.PI/2]))
 
-    return build_thing_scene(paper_plane_states[2])(renderer);
+    return build_thing_scene(paper_plane_states[3])(renderer);
 };
 
 type BuildThingSceneProps = {
@@ -507,6 +507,9 @@ class BuildThingScene {
         });
 
         // TODO: determine facet edge obstacles
+        // DEBUG for now just hardcode an example facet edge obstacle
+        // this.facet_edge_obstacles.push([this.workspace_point_obstacles[6], this.workspace_point_obstacles[7]]);
+
         // TODO: determine overhang edge obstacles
     };
 
@@ -587,7 +590,81 @@ class BuildThingScene {
     };
 
     fit_to_edge_obstacles = () => {
-        //TODO
+        // TODO: needs a rewrite..
+        // basically the same as fit_to_workspace_obstacles, but the to point needs to be in all of the workspaces at once, rather than at least one
+        // convert the from_point and to_point to 2D local coordinates
+        const inv_tf = this.prime_group.matrixWorld.clone().invert();
+        let temp: THREE.Vector3;
+        temp = this.from_point.clone().applyMatrix4(inv_tf);
+        const local_from_point = new THREE.Vector2(temp.x, temp.y);
+        temp = this.to_point.clone().applyMatrix4(inv_tf);
+        const local_to_point = new THREE.Vector2(temp.x, temp.y);
+
+        // best point shifted directly along the drag direction
+        let best_shift = Infinity;
+        let best_point: THREE.Vector2 | null = null;
+
+        // TODO: figure out the next best point... might be expensive...
+        // // backup if no best point is found. closest point in any valid workspace
+        // let okay_distance = Infinity;
+        // let okay_point: THREE.Vector2 | null = null;
+
+        const all_vertices = this.facet_edge_obstacles.flat();
+
+        // Parametrize the line segment p(t) = p0 + t(p1 - p0), with t in [0, 1]
+        const dir = new THREE.Vector2().subVectors(local_to_point, local_from_point); // Direction vector p1 - p0
+
+        // Initialize t_min to 0 and t_max to 1 (initially the whole line segment)
+        let t_min = 0;
+        let t_max = 1;
+
+        // Iterate over each circle and find the range of t where the point lies inside the circle
+        for (const center of all_vertices) {
+            const radius = center.distanceTo(local_from_point);
+
+            // Get the vector from the center of the circle to the point p0
+            const oc = new THREE.Vector2().subVectors(local_from_point, center);
+
+            // Coefficients of the quadratic equation A * t^2 + B * t + C <= 0
+            const a = dir.dot(dir); // A = |p1 - p0|^2
+            const b = 2 * oc.dot(dir); // B = 2 * (p0 - center) · (p1 - p0)
+            const c = oc.dot(oc) - radius * radius; // C = |p0 - center|^2 - r^2
+
+            // Solve the quadratic inequality A * t^2 + B * t + C <= 0
+            const discriminant = b * b - 4 * a * c;
+
+            if (discriminant < 0) {
+                // If the discriminant is negative, no intersection (line segment misses the circle)
+                return;
+            }
+
+            const sqrtD = Math.sqrt(discriminant);
+            const t1 = (-b - sqrtD) / (2 * a);
+            const t2 = (-b + sqrtD) / (2 * a);
+
+            // Ensure t1 <= t2
+            const t_min_circle = Math.min(t1, t2);
+            const t_max_circle = Math.max(t1, t2);
+
+            // Update the valid t range by intersecting with the circle's range
+            t_min = Math.max(t_min, t_min_circle);
+            t_max = Math.min(t_max, t_max_circle);
+
+            // If the range becomes invalid, there's no solution
+            if (t_min > t_max) {
+                return;
+            }
+        }
+
+        // If we found a valid range, the farthest point is at t_max
+        const best_t = t_max;
+        best_point = new THREE.Vector2().addVectors(local_from_point, dir.multiplyScalar(best_t));
+
+        temp = new THREE.Vector3(best_point.x, best_point.y, 0);
+        this.to_point.copy(temp.applyMatrix4(this.prime_group.matrixWorld));
+        this.mid_point.copy(this.from_point).lerp(this.to_point, 0.5);
+
+        return;
     };
 
     // fit_to_over_under_edge_obstacles = () => {}
