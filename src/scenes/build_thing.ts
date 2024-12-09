@@ -60,7 +60,7 @@ type BuildThingSceneProps = {
     debug_geometry?: boolean;
     shrink_workspaces?: boolean;
 };
-class BuildThingScene {
+export class BuildThingScene {
     // initialization
     layer_thickness: number;
     background_color: THREE.ColorRepresentation;
@@ -201,7 +201,8 @@ class BuildThingScene {
             onMove: this.on_move,
             // onRelease: this.on_release, //TODO: uncomment this when we have proper handling of apply_fold()
             faceBounded: false,
-            showPlane: false
+            showPlane: false,
+            // enablePan: true,
         });
     }
 
