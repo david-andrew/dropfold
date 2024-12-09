@@ -4367,11 +4367,16 @@ void main() {
 
         out vec2 vUv; // 'varying' becomes 'out' in the vertex shader
 
+        #include <clipping_planes_pars_vertex>
         void main() {
+        #include <begin_vertex>
         vUv = uv;
         gl_Position = projectionMatrix * modelViewMatrix * position;
+        #include <project_vertex>
+        #include <clipping_planes_vertex>
         }
     `,fragmentShader:`
+        #include <clipping_planes_pars_fragment>
         precision highp float;
 
         uniform float opacity;
@@ -4387,6 +4392,7 @@ void main() {
         }
 
         void main() {
+        #include <clipping_planes_fragment>
         vec3 samp = texture(map, vUv).rgb;
         float sigDist = median(samp.r, samp.g, samp.b) - 0.5;
         float alpha = clamp(sigDist / fwidth(sigDist) + 0.5, 0.0, 1.0);
