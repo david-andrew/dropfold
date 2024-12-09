@@ -285,31 +285,131 @@ export const texture_shader_material = ({texture_path, side, clippingPlanes, wid
             void main() {
                 #include <clipping_planes_fragment>
                 new_uv = vec2((vUv.x+uWidth/2.0)/uWidth, (vUv.y+uHeight/2.0)/uHeight);
-                gl_FragColor = vec4(new_uv, 0, 1);
                 gl_FragColor = texture(uTexture, new_uv);
             }`
     });
 };
 
 
-// type MSDFMaterialProps = {color?: THREE.ColorRepresentation} & MaterialProps;
-// export const msdf_material = ({ color = 0x000000, side, clippingPlanes }: MSDFMaterialProps = {}) => {
-// // const get_msdf_material = () => {
-//     const textureLoader = new THREE.TextureLoader();
-//     // const texture = textureLoader.load('../../fonts/Quadon-msdf.png');
-//     const texture = textureLoader.load('../../fonts/Figure_1.png');
-//     const textmaterial = new THREE.RawShaderMaterial(createMSDFShader({
-//         map: texture,
-//         color: color as string | number,
-//         side,
-//         // clippingPlanes,
-//         clipping: true,
-//         transparent: true,
-//         // depthTest: false,
-//         // depthWrite: false,
-//         opacity: 1,
-//     }))
-//     return textmaterial;
-//     // const text = new THREE.Mesh(geometry, textmaterial);
 
-// }
+type MSDFMaterialProps = {texture_path: string, width: number, height: number, color?:THREE.ColorRepresentation} & MaterialProps;
+export const msdf_material = ({ texture_path, width, height, color=0xffffff, side, clippingPlanes }: MSDFMaterialProps) => {
+    const texture = new THREE.TextureLoader().load(texture_path);
+    return new THREE.ShaderMaterial({
+        side,
+        clippingPlanes,
+        clipping: true,
+        uniforms: {
+            uTexture: { value: texture },
+            uWidth: { value: width },
+            uHeight: { value: height },
+            uColor: { value: new THREE.Color(color) }
+        },
+        vertexShader: `
+        varying vec2 vUv;
+        #include <clipping_planes_pars_vertex>
+        void main() {
+            #include <begin_vertex>
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            #include <project_vertex>
+            #include <clipping_planes_vertex>
+            }
+            `,
+        fragmentShader: `
+            #include <clipping_planes_pars_fragment>
+            uniform sampler2D uTexture;
+            uniform float uWidth;
+            uniform float uHeight;
+            uniform vec3 uColor;
+            varying vec2 vUv;
+
+
+            float median(float r, float g, float b) {
+                return max(min(r, g), min(max(r, g), b));
+            }
+
+            void main() {
+                #include <clipping_planes_fragment>
+                vec2 new_uv = vec2((vUv.x+uWidth/2.0)/uWidth, (vUv.y+uHeight/2.0)/uHeight);
+
+                vec3 samp = texture(uTexture, new_uv).rgb;
+                float sigDist = median(samp.r, samp.g, samp.b) - 0.5;
+                float alpha = clamp(sigDist / fwidth(sigDist) + 0.5, 0.0, 1.0);
+                gl_FragColor = vec4(uColor*alpha, alpha);
+            }`
+    });
+}
+
+
+
+
+type MSDFContactCardMaterialProps = {
+    layer0_path: string,
+    layer1_path: string,
+    icons_path: string,
+    width: number,
+    height: number,
+    color?:THREE.ColorRepresentation
+} & MaterialProps;
+export const msdf_contact_card_material = ({ layer0_path, layer1_path, icons_path, width, height, color=0xffffff, side, clippingPlanes }: MSDFContactCardMaterialProps) => {
+    const layer0 = new THREE.TextureLoader().load(layer0_path);
+    const layer1 = new THREE.TextureLoader().load(layer1_path);
+    const icons = new THREE.TextureLoader().load(icons_path);
+    return new THREE.ShaderMaterial({
+        side,
+        clippingPlanes,
+        clipping: true,
+        uniforms: {
+            uLayer0: { value: layer0 },
+            uLayer1: { value: layer1 },
+            uIcons: { value: icons },
+            uWidth: { value: width },
+            uHeight: { value: height },
+            uColor: { value: new THREE.Color(color) }
+        },
+        vertexShader: `
+        varying vec2 vUv;
+        #include <clipping_planes_pars_vertex>
+        void main() {
+            #include <begin_vertex>
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            #include <project_vertex>
+            #include <clipping_planes_vertex>
+        }
+        `,
+        fragmentShader: `
+            #include <clipping_planes_pars_fragment>
+            uniform sampler2D uLayer0;
+            uniform sampler2D uLayer1;
+            uniform sampler2D uIcons;
+            uniform float uWidth;
+            uniform float uHeight;
+            uniform vec3 uColor;
+            varying vec2 vUv;
+
+
+            float median(float r, float g, float b) {
+                return max(min(r, g), min(max(r, g), b));
+            }
+
+            void main() {
+                #include <clipping_planes_fragment>
+                vec2 new_uv = vec2((vUv.x+uWidth/2.0)/uWidth, (vUv.y+uHeight/2.0)/uHeight);
+
+                vec3 samp0 = texture(uLayer0, new_uv).rgb;
+                float sigDist0 = median(samp0.r, samp0.g, samp0.b) - 0.5;
+                float alpha0 = clamp(sigDist0 / fwidth(sigDist0) + 0.5, 0.0, 1.0);
+                vec3 samp1 = texture(uLayer1, new_uv).rgb;
+                float sigDist1 = median(samp1.r, samp1.g, samp1.b) - 0.5;
+                float alpha1 = clamp(sigDist1 / fwidth(sigDist1) + 0.5, 0.0, 1.0);
+                vec3 samp2 = texture(uIcons, new_uv).rgb;
+                float sigDist2 = median(samp2.r, samp2.g, samp2.b) - 0.5;
+                float alpha2 = clamp(sigDist2 / fwidth(sigDist2) + 0.5, 0.0, 1.0);
+
+                float alpha = max(max(alpha0, alpha1), alpha2);
+                gl_FragColor = vec4(uColor*alpha, alpha);
+            }`
+    });
+}
