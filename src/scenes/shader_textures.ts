@@ -246,3 +246,70 @@ export const seigaiha_demo = (renderer: THREE.WebGLRenderer): SceneFunctions => 
 
     return { update_scene, camera, resetter: () => {} };
 };
+
+
+type TextureShaderMaterialProps = {texture_path: string, width: number, height: number} & MaterialProps;
+export const texture_shader_material = ({texture_path, side, clippingPlanes, width, height}: TextureShaderMaterialProps) => {
+    // super simple shader that just uses the texture directly
+    const textureLoader = new THREE.TextureLoader();
+    const texture = textureLoader.load(texture_path);
+    return new THREE.ShaderMaterial({
+        side,
+        clippingPlanes,
+        clipping: true,
+        uniforms: {
+            uTexture: { value: texture },
+            uWidth: { value: width },
+            uHeight: { value: height }
+        },
+        vertexShader: `
+            varying vec2 vUv;
+            #include <clipping_planes_pars_vertex>
+            void main() {
+                #include <begin_vertex>
+                vUv = uv;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                #include <project_vertex>
+                #include <clipping_planes_vertex>
+            }
+        `,
+        fragmentShader: `
+            #include <clipping_planes_pars_fragment>
+            uniform sampler2D uTexture;
+            uniform float uWidth;
+            uniform float uHeight;
+            varying vec2 vUv;
+
+            vec2 new_uv;
+
+            void main() {
+                #include <clipping_planes_fragment>
+                new_uv = vec2((vUv.x+uWidth/2.0)/uWidth, (vUv.y+uHeight/2.0)/uHeight);
+                gl_FragColor = vec4(new_uv, 0, 1);
+                gl_FragColor = texture(uTexture, new_uv);
+            }`
+    });
+};
+
+
+// type MSDFMaterialProps = {color?: THREE.ColorRepresentation} & MaterialProps;
+// export const msdf_material = ({ color = 0x000000, side, clippingPlanes }: MSDFMaterialProps = {}) => {
+// // const get_msdf_material = () => {
+//     const textureLoader = new THREE.TextureLoader();
+//     // const texture = textureLoader.load('../../fonts/Quadon-msdf.png');
+//     const texture = textureLoader.load('../../fonts/Figure_1.png');
+//     const textmaterial = new THREE.RawShaderMaterial(createMSDFShader({
+//         map: texture,
+//         color: color as string | number,
+//         side,
+//         // clippingPlanes,
+//         clipping: true,
+//         transparent: true,
+//         // depthTest: false,
+//         // depthWrite: false,
+//         opacity: 1,
+//     }))
+//     return textmaterial;
+//     // const text = new THREE.Mesh(geometry, textmaterial);
+
+// }
