@@ -7,16 +7,18 @@ import { OrbitalPointer } from '../controls';
 import { MaterialFactory, MaterialProps, harlequin_circles, seigaiha, texture_shader_material, msdf_material, msdf_contact_card_material } from './shader_textures';
 import { BuildThingScene } from './build_thing';
 import { createMSDFShader } from '../msdf/three-bmfont-text';
-
+import layer0_path from '../textures/layer0.png';
+import layer1_path from '../textures/layer1.png';
+import icons_path from '../textures/icons.png';
 
 export const build_thing_scene =
     (thing_t: ThingTemplate) =>
     (renderer: THREE.WebGLRenderer): SceneFunctions => {
         const material_factories: MaterialFactory[] = [
             (props: MaterialProps = {}) => msdf_contact_card_material({
-                layer0_path: '../../textures/layer0.png', 
-                layer1_path: '../../textures/layer1.png',
-                icons_path: '../../textures/icons.png',
+                layer0_path,
+                layer1_path,
+                icons_path,
                 side: THREE.FrontSide, 
                 width:3.5, 
                 height:2, 
