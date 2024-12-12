@@ -136,7 +136,7 @@ export const seigaiha = ({ color0 = 0x87ceeb, color1 = 0xffffff, side, clippingP
                 float r3 = r0 * 0.225;
                 float r4 = r0 * 0.0;
 
-            
+
                 // Create a grid where each cell is the size of the spacing
                 vec2 scale = vec2(horizontal_spacing, vertical_spacing);
                 vec2 uv = vUv * density / scale; // Scale the UV coordinates
@@ -262,17 +262,7 @@ export const texture_shader_material = ({texture_path, side, clippingPlanes, wid
             uWidth: { value: width },
             uHeight: { value: height }
         },
-        vertexShader: `
-            varying vec2 vUv;
-            #include <clipping_planes_pars_vertex>
-            void main() {
-                #include <begin_vertex>
-                vUv = uv;
-                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-                #include <project_vertex>
-                #include <clipping_planes_vertex>
-            }
-        `,
+        vertexShader: passthrough_vertex_shader,
         fragmentShader: `
             #include <clipping_planes_pars_fragment>
             uniform sampler2D uTexture;
@@ -305,17 +295,7 @@ export const msdf_material = ({ texture_path, width, height, color=0xffffff, sid
             uHeight: { value: height },
             uColor: { value: new THREE.Color(color) }
         },
-        vertexShader: `
-        varying vec2 vUv;
-        #include <clipping_planes_pars_vertex>
-        void main() {
-            #include <begin_vertex>
-            vUv = uv;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-            #include <project_vertex>
-            #include <clipping_planes_vertex>
-            }
-            `,
+        vertexShader: passthrough_vertex_shader,
         fragmentShader: `
             #include <clipping_planes_pars_fragment>
             uniform sampler2D uTexture;
@@ -329,6 +309,18 @@ export const msdf_material = ({ texture_path, width, height, color=0xffffff, sid
                 return max(min(r, g), min(max(r, g), b));
             }
 
+            /*
+            How this algorithm works:
+                Multichannel Signed Distance Fields use SDFs in each channel to indicate the true object location
+                In a normal SDF, the object is present wherever the value is positive
+                In a MSDF, the object is present anywhere at least 2 values/channels are positive
+
+                1. Sample the texture at the current UV coordinate
+                2. Take the median of the RGB values. If the median is positive, it means at least 1 other channel was also positive.
+                    This is the signed distance, which we could directly check if it's positive to determine if the object is present
+                3. Divide the signed distance by fwidth(signed distance) and clamp. This is applying anti-aliasing. fwidth measures
+                    the absolute derivative of the signed distance, and somehow this is equivalent to signed distance > 0 but with anti-aliasing
+            */
             void main() {
                 #include <clipping_planes_fragment>
                 vec2 new_uv = vec2((vUv.x+uWidth/2.0)/uWidth, (vUv.y+uHeight/2.0)/uHeight);
@@ -368,17 +360,7 @@ export const msdf_contact_card_material = ({ layer0_path, layer1_path, icons_pat
             uHeight: { value: height },
             uColor: { value: new THREE.Color(color) }
         },
-        vertexShader: `
-        varying vec2 vUv;
-        #include <clipping_planes_pars_vertex>
-        void main() {
-            #include <begin_vertex>
-            vUv = uv;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-            #include <project_vertex>
-            #include <clipping_planes_vertex>
-        }
-        `,
+        vertexShader: passthrough_vertex_shader,
         fragmentShader: `
             #include <clipping_planes_pars_fragment>
             uniform sampler2D uLayer0;
