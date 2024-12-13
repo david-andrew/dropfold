@@ -312,6 +312,7 @@ export const msdf_material = ({ texture_path, width, height, color=0xffffff, sid
             /*
             How this algorithm works:
                 Multichannel Signed Distance Fields use SDFs in each channel to indicate the true object location
+                See this master's thesis: https://github.com/Chlumsky/msdfgen/files/3050967/thesis.pdf
                 In a normal SDF, the object is present wherever the value is positive
                 In a MSDF, the object is present anywhere at least 2 values/channels are positive
 
@@ -320,6 +321,7 @@ export const msdf_material = ({ texture_path, width, height, color=0xffffff, sid
                     This is the signed distance, which we could directly check if it's positive to determine if the object is present
                 3. Divide the signed distance by fwidth(signed distance) and clamp. This is applying anti-aliasing. fwidth measures
                     the absolute derivative of the signed distance, and somehow this is equivalent to signed distance > 0 but with anti-aliasing
+                    see: https://drewcassidy.me/2020/06/26/sdf-antialiasing/ for a better explanation
             */
             void main() {
                 #include <clipping_planes_fragment>
