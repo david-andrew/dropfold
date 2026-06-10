@@ -9,7 +9,7 @@ import { Line2 } from 'three/examples/jsm/lines/Line2.js';
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 
-import { Vec2, closestBoundaryPoint, polygonCentroid } from './engine/geometry';
+import { Vec2, Isometry, closestBoundaryPoint, polygonCentroid, applyIso, invertIso, lerp } from './engine/geometry';
 import {
     FoldedState,
     Crease,
@@ -17,11 +17,11 @@ import {
     foldedPoly,
     getCreases,
     creaseKeyPoint,
-    findOverride,
-    outOfPlaneFacets
+    findOverride
 } from './engine/model';
-import { clampedSimpleFold } from './engine/simple_fold';
+import { clampedSimpleFold, SimpleFoldResult } from './engine/simple_fold';
 import { FoldOp, applyOp } from './engine/ops';
+import { canOpenCrease } from './engine/pose';
 import { OrbitalPointer } from './controls';
 import { buildPaperObject, PaperObject, PaperStyle, stateRadius } from './render/paper_mesh';
 import { PatternId } from './render/materials';
@@ -89,8 +89,12 @@ export class App {
 
     // drag state
     dragFrom: Vec2 | null = null;
+    dragFromPaper: Vec2 | null = null;
+    dragInv: THREE.Matrix4 | null = null; // world -> grabbed facet paper space
+    dragIso: Isometry | null = null; // grabbed facet paper space -> component flat frame
     dragSign: 1 | -1 = 1;
     lastGoodTo: Vec2 | null = null;
+    lastGoodResult: SimpleFoldResult | null = null;
     lastGoodOp: FoldOp | null = null;
     lastGoodState: FoldedState | null = null;
 
@@ -98,7 +102,11 @@ export class App {
 
     // ctrl-held 3D fold mode
     ctrlDown = false;
+    touch3DMode = false;
+    private touch3DSelecting = false;
+    private touch3DArmed = false;
     private hover: { crease: Crease; facetIdx: number } | null = null;
+    private lockCache = new Map<string, boolean>(); // per-crease tear check, valid for the current committed state
     private highlightLine!: Line2;
     private highlightMat!: LineMaterial;
     private angleDrag: {
@@ -198,7 +206,8 @@ export class App {
         this.previewObj = null;
         this.paperObj = this.buildObject(this.committed);
         this.meshToFacet = new Map(this.paperObj.facetMeshes.map((m, i) => [m, i]));
-        if (this.ctrlDown && !this.angleDrag) this.updateHover();
+        this.lockCache.clear();
+        if (this.ctrlDown && !this.angleDrag) this.updateHover(this.currentHoverPointer());
         this.onChange();
     };
 
@@ -216,6 +225,14 @@ export class App {
 
     animate = () => {
         requestAnimationFrame(this.animate);
+        if (this.movePending) {
+            this.movePending = false;
+            this.processMove();
+        }
+        if (this.hoverPending) {
+            this.hoverPending = false;
+            if (this.ctrlDown && !this.controls.isInteracting) this.updateHover();
+        }
         this.renderer.render(this.scene, this.camera);
     };
 
@@ -234,9 +251,11 @@ export class App {
 
     // ---------------------------------------------------------- interaction
 
+    private hoverPending = false;
+
     private trackPointer = (e: MouseEvent) => {
         this.lastPointer.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
-        if (this.ctrlDown && !this.controls.isInteracting) this.updateHover();
+        if (this.ctrlDown && !this.controls.isInteracting) this.hoverPending = true;
     };
 
     onPress = () => {
@@ -244,41 +263,84 @@ export class App {
             this.startAngleDrag();
             return;
         }
+        if (this.touch3DGestureActive()) {
+            if (this.touch3DArmed && this.hover) {
+                this.startAngleDrag();
+            } else {
+                this.touch3DSelecting = true;
+                this.touch3DArmed = false;
+                this.updateHover(this.controls.pointer);
+            }
+            return;
+        }
         const mesh = this.controls.touchMesh;
-        if (!mesh || !this.controls.touchPoint || !this.controls.touchNormal) return;
+        if (!mesh || !this.controls.touchPoint || !this.controls.touchNormal || !this.paperObj) return;
         const facetIdx = this.meshToFacet.get(mesh);
         if (facetIdx === undefined) return;
-        // 3D-lifted facets can't be flat-folded; use ctrl-drag on their hinge instead
-        if (outOfPlaneFacets(this.committed).has(facetIdx)) return;
 
-        this.dragSign = this.controls.touchNormal.z >= 0 ? 1 : -1;
+        // map the world-space touch into the grabbed facet's flat frame
+        // (identity for the base plane; for a 3D-lifted component this undoes
+        // the pose so the fold happens within that component's own plane)
+        const facet = this.committed.facets[facetIdx];
+        this.dragInv = this.paperObj.matrices[facetIdx].clone().invert();
+        this.dragIso = facet.iso;
+
+        const local = this.controls.touchPoint.clone().applyMatrix4(this.dragInv);
+        const touch2d = applyIso(facet.iso, [local.x, local.y]);
+
+        // fold over/under in layer terms: grabbing the face that looks toward
+        // increasing layers means the flap should land on higher layers; the
+        // layer direction follows the thickness frame, not the surface frame
+        // (they diverge on negative-angle hinges, where surface +z points up
+        // again while the layers stack downward)
+        this.dragSign = this.controls.touchNormal.dot(this.paperObj.layerDirs[facetIdx]) >= 0 ? 1 : -1;
 
         // the fold starts from the closest point on the grabbed facet's boundary
-        const touch2d: Vec2 = [this.controls.touchPoint.x, this.controls.touchPoint.y];
-        const poly = foldedPoly(this.committed.facets[facetIdx]);
+        const poly = foldedPoly(facet);
         this.dragFrom = closestBoundaryPoint(poly, touch2d).point;
+        // paper-space grab point identifying the grabbed facet on replay,
+        // nudged inside so it doesn't sit ambiguously on the boundary
+        const paperFrom = applyIso(invertIso(facet.iso), this.dragFrom);
+        this.dragFromPaper = lerp(paperFrom, polygonCentroid(facet.poly), 1e-3);
         this.lastGoodTo = null;
+        this.lastGoodResult = null;
         this.lastGoodOp = null;
         this.lastGoodState = null;
     };
 
+    // pointer events can fire far above the frame rate (high polling-rate
+    // mice); coalesce them and process at most one move per rendered frame
+    private movePending = false;
+
     onMove = () => {
+        this.movePending = true;
+    };
+
+    private processMove = () => {
         if (this.angleDrag) {
             this.moveAngleDrag();
             return;
         }
-        if (!this.dragFrom || !this.controls.touchPoint) return;
-        const to: Vec2 = [this.controls.touchPoint.x, this.controls.touchPoint.y];
+        if (this.touch3DSelecting) {
+            this.updateHover(this.controls.pointer);
+            return;
+        }
+        if (!this.dragFrom || !this.controls.touchPoint || !this.dragInv || !this.dragIso) return;
+        const local = this.controls.touchPoint.clone().applyMatrix4(this.dragInv);
+        const to = applyIso(this.dragIso, [local.x, local.y]);
 
         if (this.mode === 'simple') {
             // clamps the drag to the furthest valid fold along the way
             const r = clampedSimpleFold(
                 this.committed,
-                { from: this.dragFrom, to, sign: this.dragSign },
-                this.lastGoodTo
+                { from: this.dragFrom, to, sign: this.dragSign, fromPaper: this.dragFromPaper ?? undefined },
+                this.lastGoodResult
             );
             if (r) {
+                // fully pressed against an obstacle: result unchanged, skip the rebuild
+                if (r === this.lastGoodResult) return;
                 this.lastGoodTo = r.params.to;
+                this.lastGoodResult = r;
                 this.lastGoodOp = { type: 'simple', ...r.params };
                 this.lastGoodState = r.state;
                 this.showPreview(r.state);
@@ -300,19 +362,46 @@ export class App {
     };
 
     onRelease = () => {
+        const wasAngleDrag = this.angleDrag !== null;
+        const wasTouchSelecting = this.touch3DSelecting;
+        const selectedHover = wasTouchSelecting && !wasAngleDrag ? this.hover : null;
         if (this.lastGoodOp && this.lastGoodState) {
             this.commitOp(this.lastGoodOp, this.lastGoodState);
         }
         this.dragFrom = null;
+        this.dragFromPaper = null;
+        this.dragInv = null;
+        this.dragIso = null;
         this.angleDrag = null;
+        this.touch3DSelecting = false;
+        this.movePending = false;
         this.lastGoodTo = null;
+        this.lastGoodResult = null;
         this.lastGoodOp = null;
         this.lastGoodState = null;
         this.clearPreview();
         this.rebuild();
         // rebuild refreshes the hover highlight while Ctrl is held; once it's
         // released there's nothing to refresh it, so clear it explicitly
-        if (!this.ctrlDown) this.clearHover();
+        if (this.ctrlDown) {
+            this.touch3DArmed = false;
+            this.updateHover(this.currentHoverPointer());
+        } else if (this.touch3DMode) {
+            this.touch3DArmed = !wasAngleDrag && wasTouchSelecting && this.hover !== null;
+            // touch 3D selection should arm the exact edge the user just saw
+            // highlighted, rather than re-picking on finger-up (which can snap
+            // to a neighboring edge if the last coalesced pointer sample differs)
+            if (selectedHover && this.paperObj) {
+                this.hover = selectedHover;
+                this.highlightMat.color.set(this.isCreaseLocked(selectedHover.crease) ? 0xff4d4d : 0xffc83d);
+                this.setHighlight(selectedHover.crease.seg, this.paperObj.matrices[selectedHover.facetIdx]);
+            } else {
+                this.clearHover();
+            }
+        } else {
+            this.touch3DArmed = false;
+            this.clearHover();
+        }
     };
 
     // ------------------------------------------------------- ctrl 3D folding
@@ -323,10 +412,10 @@ export class App {
      * mouse "at" an edge from inside the facet selects it); falls back to the
      * nearest crease.
      */
-    private pickCrease = (): { crease: Crease; facetIdx: number } | null => {
+    private pickCrease = (pointer: THREE.Vector2 = this.lastPointer): { crease: Crease; facetIdx: number } | null => {
         if (!this.paperObj) return null;
         const raycaster = new THREE.Raycaster();
-        raycaster.setFromCamera(this.lastPointer, this.camera);
+        raycaster.setFromCamera(pointer, this.camera);
         const hits = raycaster.intersectObjects(this.paperObj.facetMeshes);
         if (hits.length === 0) return null;
         const mesh = hits[0].object as THREE.Mesh;
@@ -378,9 +467,21 @@ export class App {
         this.highlightLine.visible = true;
     };
 
-    private updateHover = () => {
-        this.hover = this.pickCrease();
+    /** Would hinging this crease tear the paper? Cached for the committed state. */
+    private isCreaseLocked = (crease: Crease): boolean => {
+        const key = `${crease.a},${crease.b}:${crease.seg[0]}:${crease.seg[1]}`;
+        let locked = this.lockCache.get(key);
+        if (locked === undefined) {
+            locked = !canOpenCrease(this.committed, crease);
+            this.lockCache.set(key, locked);
+        }
+        return locked;
+    };
+
+    private updateHover = (pointer: THREE.Vector2 = this.lastPointer) => {
+        this.hover = this.pickCrease(pointer);
         if (this.hover && this.paperObj) {
+            this.highlightMat.color.set(this.isCreaseLocked(this.hover.crease) ? 0xff4d4d : 0xffc83d);
             this.setHighlight(this.hover.crease.seg, this.paperObj.matrices[this.hover.facetIdx]);
         } else {
             this.setHighlight(null);
@@ -395,6 +496,7 @@ export class App {
     private startAngleDrag = () => {
         const pick = this.hover ?? this.pickCrease();
         if (!pick || !this.paperObj) return;
+        if (this.isCreaseLocked(pick.crease)) return;
         const { crease, facetIdx } = pick;
         const mid = new THREE.Vector3(
             (crease.seg[0][0] + crease.seg[1][0]) / 2,
@@ -420,7 +522,7 @@ export class App {
     private moveAngleDrag = () => {
         const drag = this.angleDrag!;
         const d = this.controls.pointer.clone().sub(drag.startNDC).dot(drag.dirNDC);
-        const angle = Math.round(Math.max(0, Math.min(180, drag.baseAngle - d * drag.degPerNDC)));
+        const angle = Math.round(Math.max(-180, Math.min(180, drag.baseAngle - d * drag.degPerNDC)));
         const op: FoldOp = { type: 'angle', point: drag.point, angle };
         const next = applyOp(this.committed, op);
         if (!next) return;
@@ -470,17 +572,27 @@ export class App {
     onKeyUp = (e: KeyboardEvent) => {
         if (e.key === 'Control') {
             this.ctrlDown = false;
-            if (!this.angleDrag) this.clearHover();
+            if (!this.angleDrag && !this.touch3DMode) this.clearHover();
         }
     };
 
     onBlur = () => {
         this.ctrlDown = false;
-        if (!this.angleDrag) this.clearHover();
+        if (!this.angleDrag && !this.touch3DMode) this.clearHover();
     };
 
     setMode = (mode: FoldMode) => {
         this.mode = mode;
+        this.onChange();
+    };
+
+    setTouch3DMode = (enabled: boolean) => {
+        this.touch3DMode = enabled;
+        this.touch3DSelecting = false;
+        this.touch3DArmed = false;
+        if (!enabled || (!this.ctrlDown && !this.angleDrag)) {
+            this.clearHover();
+        }
         this.onChange();
     };
 
@@ -672,6 +784,13 @@ export class App {
         window.removeEventListener('keyup', this.onKeyUp);
         window.removeEventListener('blur', this.onBlur);
     };
+
+    private touch3DGestureActive = (): boolean => this.touch3DMode && this.controls.pointerType === 'touch';
+
+    private threeDModeActive = (): boolean => this.ctrlDown || this.touch3DMode;
+
+    private currentHoverPointer = (): THREE.Vector2 =>
+        this.touch3DMode && this.controls.pointerType === 'touch' ? this.controls.pointer : this.lastPointer;
 }
 
 /** Parameter t along the ray o + t*dir where it crosses segment seg, or null. */

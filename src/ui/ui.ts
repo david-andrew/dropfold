@@ -23,6 +23,21 @@ const el = <K extends keyof HTMLElementTagNameMap>(
     return node;
 };
 
+const touchModeIcon = (mode: '2d' | '3d') => {
+    const icon = el('span', { class: 'touch-mode-icon' });
+    icon.innerHTML =
+        mode === '3d'
+            ? `<svg viewBox="0 0 32 32" aria-hidden="true">
+                <path d="M10 12 18 8 26 12 18 16Z" />
+                <path d="M10 12V21L18 25V16" />
+                <path d="M18 16 26 12V21L18 25" />
+            </svg>`
+            : `<svg viewBox="0 0 32 32" aria-hidden="true">
+                <rect x="8" y="8" width="16" height="16" rx="1.5" />
+            </svg>`;
+    return icon;
+};
+
 let toastTimer: number | undefined;
 export const toast = (msg: string) => {
     let t = document.getElementById('toast');
@@ -37,12 +52,29 @@ export const toast = (msg: string) => {
 };
 
 export const buildUI = (app: App) => {
+    const touchCapable = navigator.maxTouchPoints > 0 || window.matchMedia('(pointer: coarse)').matches;
     const root = el('div', { id: 'ui-root' });
     const panel = el('div', { class: 'panel' });
+    const panelHeader = el('div', { class: 'panel-header' });
+    const panelTitle = el('div', { class: 'panel-title' });
+    const collapseBtn = el('button', { class: 'panel-toggle', type: 'button', 'aria-label': 'Minimize menu' }, 'Hide');
+    const panelBody = el('div', { class: 'panel-body' });
     root.appendChild(panel);
+    panel.append(panelHeader, panelBody);
 
-    panel.appendChild(el('h1', {}, 'dropfold'));
-    panel.appendChild(el('div', { class: 'subtitle' }, 'drag the paper to fold it'));
+    panelTitle.append(el('h1', {}, 'dropfold'), el('div', { class: 'subtitle' }, 'drag the paper to fold it'));
+    panelHeader.append(panelTitle, collapseBtn);
+
+    let collapsed = true;
+    const syncPanel = () => {
+        panel.classList.toggle('collapsed', collapsed);
+        collapseBtn.textContent = collapsed ? 'Menu' : 'Hide';
+        collapseBtn.setAttribute('aria-label', collapsed ? 'Open menu' : 'Minimize menu');
+    };
+    collapseBtn.onclick = () => {
+        collapsed = !collapsed;
+        syncPanel();
+    };
 
     // ------------------------------------------------------------ fold tools
     const tools = el('details', { open: '' });
@@ -72,7 +104,7 @@ export const buildUI = (app: App) => {
     tools.appendChild(el('div', { class: 'btn-row' }, btnUndo, btnRedo, btnReset));
     const status = el('div', { class: 'status' });
     tools.appendChild(status);
-    panel.appendChild(tools);
+    panelBody.appendChild(tools);
 
     // ------------------------------------------------------------ paper setup
     const paper = el('details', {});
@@ -106,7 +138,7 @@ export const buildUI = (app: App) => {
     paper.appendChild(
         el('div', { class: 'hint' }, 'Changing shape or size starts a new sheet. Colors and patterns apply live.')
     );
-    panel.appendChild(paper);
+    panelBody.appendChild(paper);
 
     const readConfig = (): PaperConfig => ({
         shape: shapeSel.value as ShapeId,
@@ -174,7 +206,7 @@ export const buildUI = (app: App) => {
     file.appendChild(el('div', { class: 'btn-row' }, btnSave, btnLoad));
     file.appendChild(el('div', { class: 'hint' }, 'You can also drag a .fold.json file anywhere onto the window.'));
     file.appendChild(fileInput);
-    panel.appendChild(file);
+    panelBody.appendChild(file);
 
     // --------------------------------------------------------------- samples
     const samples = el('details', {});
@@ -189,7 +221,7 @@ export const buildUI = (app: App) => {
         sampleRow.appendChild(b);
     }
     samples.appendChild(sampleRow);
-    panel.appendChild(samples);
+    panelBody.appendChild(samples);
 
     // ------------------------------------------------------------------ help
     const help = el('details', {});
@@ -201,7 +233,8 @@ export const buildUI = (app: App) => {
         ['Alt + drag', 'pan the camera'],
         ['scroll', 'zoom'],
         ['Q / R / S / P', 'fold mode: simple / reverse / squash / petal'],
-        ['hold Ctrl', '3D fold mode: hover highlights a crease, drag swings the flap over it'],
+        ['hold Ctrl', '3D fold mode: hover highlights a crease, drag swings the flap over it (red = locked: hinging would tear the paper)'],
+        ['touch 3D button', 'on touch devices: tap once to enter 3D edge-picking mode, then tap-drag to open that crease'],
         ['Ctrl+Z', 'undo'],
         ['Ctrl+Shift+Z', 'redo']
     ];
@@ -217,11 +250,23 @@ export const buildUI = (app: App) => {
                 'Reverse, squash and petal folds act on flaps: grab near the flap tip (reverse/petal) or its folded edge (squash) and drag where it should go.'
         )
     );
-    panel.appendChild(help);
+    panelBody.appendChild(help);
 
     // ------------------------------------------------------------- drag-drop
     const dropOverlay = el('div', { id: 'drop-overlay' }, 'drop .fold.json to load');
     document.body.appendChild(dropOverlay);
+
+    let touch3DBtn: HTMLButtonElement | null = null;
+    if (touchCapable) {
+        touch3DBtn = el(
+            'button',
+            { id: 'touch-3d-toggle', type: 'button', 'aria-label': 'Switch to 3D mode' },
+            touchModeIcon('2d'),
+            el('span', { class: 'touch-mode-label' }, '2D')
+        );
+        touch3DBtn.onclick = () => app.setTouch3DMode(!app.touch3DMode);
+        document.body.appendChild(touch3DBtn);
+    }
     window.addEventListener('dragover', (e) => {
         e.preventDefault();
         dropOverlay.classList.add('active');
@@ -243,6 +288,14 @@ export const buildUI = (app: App) => {
         for (const [mode, b] of modeButtons) {
             b.classList.toggle('active', app.mode === mode);
         }
+        if (touch3DBtn) {
+            touch3DBtn.classList.toggle('active', app.touch3DMode);
+            touch3DBtn.replaceChildren(
+                touchModeIcon(app.touch3DMode ? '3d' : '2d'),
+                el('span', { class: 'touch-mode-label' }, app.touch3DMode ? '3D' : '2D')
+            );
+            touch3DBtn.setAttribute('aria-label', app.touch3DMode ? 'Switch to 2D mode' : 'Switch to 3D mode');
+        }
         btnUndo.disabled = !app.canUndo();
         btnRedo.disabled = !app.canRedo();
         const n = app.ops.length;
@@ -255,6 +308,7 @@ export const buildUI = (app: App) => {
     };
 
     writeConfig(app.config);
+    syncPanel();
     document.body.appendChild(root);
     app.onChange();
 };

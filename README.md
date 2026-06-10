@@ -14,7 +14,7 @@ airplane, fold an origami crane, or invent something else.
 | `Alt` + drag | pan the camera |
 | scroll | zoom |
 | `Q` / `R` / `S` / `P` | fold mode: simple / reverse / squash / petal |
-| hold `Ctrl` | 3D fold mode: hover highlights the targeted crease, drag swings the flap over it |
+| hold `Ctrl` | 3D fold mode: hover highlights the targeted crease, drag swings the flap over it (red = locked: hinging would tear the paper) |
 | `Ctrl+Z` / `Ctrl+Shift+Z` | undo / redo |
 
 Grab the front of the paper to fold over the top; orbit behind and grab the

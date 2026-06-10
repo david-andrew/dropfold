@@ -28,6 +28,7 @@ export type PaperObject = {
     group: THREE.Group;
     facetMeshes: THREE.Mesh[]; // indexed like state.facets
     matrices: THREE.Matrix4[]; // pose transform per facet (paper space -> world)
+    layerDirs: THREE.Vector3[]; // world direction of increasing layer per facet
     dispose: () => void;
 };
 
@@ -38,7 +39,7 @@ export const buildPaperObject = (state: FoldedState, style: PaperStyle): PaperOb
     const disposables: { dispose: () => void }[] = [];
     const facetMeshes: THREE.Mesh[] = [];
 
-    const { matrices, creases } = computePose(state, style.thickness ?? DEFAULT_THICKNESS);
+    const { matrices, layerDirs, creases } = computePose(state, style.thickness ?? DEFAULT_THICKNESS);
 
     const frontMat = makePatternMaterial(style.frontPattern, style.frontColor0, style.frontColor1, THREE.FrontSide);
     const backMat = makePatternMaterial(style.backPattern, style.backColor0, style.backColor1, THREE.BackSide);
@@ -116,6 +117,7 @@ export const buildPaperObject = (state: FoldedState, style: PaperStyle): PaperOb
         group,
         facetMeshes,
         matrices,
+        layerDirs,
         dispose: () => disposables.forEach((d) => d.dispose())
     };
 };

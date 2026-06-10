@@ -37,7 +37,7 @@ export type Facet = {
 
 export type AngleOverride = {
     point: Vec2; // paper-space point on the crease
-    angle: number; // degrees in [0, 180]; 180 = fully flat-folded, smaller opens the fold
+    angle: number; // degrees in [-180, 180]; 180 = flat fold, 0 = fully open, -180 = flat on the opposite side
 };
 
 export type FoldedState = {
@@ -62,18 +62,42 @@ export const foldedPoly = (f: Facet): Polygon => f.poly.map((p) => applyIso(f.is
 /** Whether the facet's front face (paper front side) points up (+z) in the folded state. */
 export const facetFaceUp = (f: Facet): boolean => !isMirrored(f.iso);
 
+// memoized per facets array: facet polys are never mutated once a state is
+// built, and drag clamping re-derives creases for the same state many times
+const creaseCache = new WeakMap<Facet[], Crease[]>();
+
 /** All creases, derived from paper-space adjacency. */
 export const getCreases = (state: FoldedState): Crease[] => {
+    const cached = creaseCache.get(state.facets);
+    if (cached) return cached;
+
     const out: Crease[] = [];
     const n = state.facets.length;
+    // facets can only share boundary if their paper-space bounding boxes touch
+    const boxes = state.facets.map((f) => {
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        for (const p of f.poly) {
+            if (p[0] < x0) x0 = p[0];
+            if (p[0] > x1) x1 = p[0];
+            if (p[1] < y0) y0 = p[1];
+            if (p[1] > y1) y1 = p[1];
+        }
+        return { x0, y0, x1, y1 };
+    });
+    const margin = 1e-2;
     for (let i = 0; i < n; i++) {
+        const bi = boxes[i];
         for (let j = i + 1; j < n; j++) {
+            const bj = boxes[j];
+            if (bi.x1 < bj.x0 - margin || bj.x1 < bi.x0 - margin) continue;
+            if (bi.y1 < bj.y0 - margin || bj.y1 < bi.y0 - margin) continue;
             const segs = sharedBoundarySegments(state.facets[i].poly, state.facets[j].poly);
             for (const seg of segs) {
                 out.push({ a: i, b: j, seg });
             }
         }
     }
+    creaseCache.set(state.facets, out);
     return out;
 };
 
@@ -101,22 +125,36 @@ export const creaseKeyPoint = (crease: Crease): Vec2 => midpoint(crease.seg[0], 
 export const effectiveAngles = (state: FoldedState, creases: Crease[]): (number | null)[] => {
     const angles: (number | null)[] = creases.map((c) => findOverride(state, c)?.angle ?? null);
     if (state.overrides.length === 0) return angles;
+    const m = creases.length;
     const segs = creases.map((c): [Vec2, Vec2] => [
         applyIso(state.facets[c.a].iso, c.seg[0]),
         applyIso(state.facets[c.a].iso, c.seg[1])
     ]);
-    let changed = true;
-    while (changed) {
-        changed = false;
-        for (let i = 0; i < creases.length; i++) {
-            if (angles[i] === null) continue;
-            for (let j = 0; j < creases.length; j++) {
-                if (angles[j] !== null) continue;
-                if (collinearOverlap(segs[i][0], segs[i][1], segs[j][0], segs[j][1])) {
-                    angles[j] = angles[i];
-                    changed = true;
-                }
+    // union creases that overlap on a common folded line; angles spread through
+    // chains of overlap, so components inherit any member's override
+    const parent = Array.from({ length: m }, (_, i) => i);
+    const find = (x: number): number => {
+        while (parent[x] !== x) {
+            parent[x] = parent[parent[x]];
+            x = parent[x];
+        }
+        return x;
+    };
+    for (let i = 0; i < m; i++) {
+        for (let j = i + 1; j < m; j++) {
+            if (find(i) === find(j)) continue;
+            if (collinearOverlap(segs[i][0], segs[i][1], segs[j][0], segs[j][1])) {
+                parent[find(i)] = find(j);
             }
+        }
+    }
+    const componentAngle = new Map<number, number>();
+    for (let i = 0; i < m; i++) {
+        if (angles[i] !== null) componentAngle.set(find(i), angles[i]!);
+    }
+    for (let i = 0; i < m; i++) {
+        if (angles[i] === null) {
+            angles[i] = componentAngle.get(find(i)) ?? null;
         }
     }
     return angles;
@@ -126,41 +164,126 @@ export const effectiveAngles = (state: FoldedState, creases: Crease[]): (number 
  * Facets lifted out of the base plane by 3D angle overrides: everything not
  * connected to the largest facet (the pose root) through flat creases.
  */
-export const outOfPlaneFacets = (state: FoldedState, creases: Crease[] = getCreases(state)): Set<number> => {
+export type ComponentInfo = {
+    compOf: number[]; // flat-component id per facet
+    base: number; // id of the base component (stays fixed in the pose)
+    count: number;
+};
+
+const componentCache = new WeakMap<FoldedState, ComponentInfo>();
+
+/**
+ * Flat components: groups of facets connected through flat (non-hinged)
+ * creases. Each component is rigid and internally flat; 3D hinges only occur
+ * between components.
+ *
+ * The base component (the one that stays fixed in the pose, and that grabs
+ * default to) is the area-weighted centroid of the component tree: for every
+ * hinge, the side with more paper stays put and the lighter side swings.
+ * Unlike a "largest facet" rule this is stable while folds split facets.
+ */
+export const flatComponentInfo = (state: FoldedState, creases: Crease[] = getCreases(state)): ComponentInfo => {
+    const cached = componentCache.get(state);
+    if (cached) return cached;
     const n = state.facets.length;
-    if (state.overrides.length === 0) return new Set();
-    const angles = effectiveAngles(state, creases);
-    const adj: number[][] = Array.from({ length: n }, () => []);
+
+    const parent = Array.from({ length: n }, (_, i) => i);
+    const find = (x: number): number => {
+        while (parent[x] !== x) {
+            parent[x] = parent[parent[x]];
+            x = parent[x];
+        }
+        return x;
+    };
+    const angles = state.overrides.length === 0 ? creases.map(() => null) : effectiveAngles(state, creases);
     creases.forEach((c, k) => {
-        if (angles[k] === null) {
-            adj[c.a].push(c.b);
-            adj[c.b].push(c.a);
+        if (angles[k] === null || angles[k]! >= 180) parent[find(c.a)] = find(c.b);
+    });
+
+    const ids = new Map<number, number>();
+    const compOf = state.facets.map((_, i) => {
+        const r = find(i);
+        if (!ids.has(r)) ids.set(r, ids.size);
+        return ids.get(r)!;
+    });
+    const count = ids.size;
+
+    // component areas and hinge adjacency
+    const area = new Array(count).fill(0);
+    state.facets.forEach((f, i) => (area[compOf[i]] += Math.abs(polygonArea(f.poly))));
+    const adj: Set<number>[] = Array.from({ length: count }, () => new Set());
+    creases.forEach((c) => {
+        const a = compOf[c.a];
+        const b = compOf[c.b];
+        if (a !== b) {
+            adj[a].add(b);
+            adj[b].add(a);
         }
     });
-    let root = 0;
-    let bestArea = -Infinity;
-    state.facets.forEach((f, i) => {
-        const a = Math.abs(polygonArea(f.poly));
-        if (a > bestArea) {
-            bestArea = a;
-            root = i;
-        }
-    });
-    const inPlane = new Set<number>([root]);
-    const queue = [root];
-    while (queue.length > 0) {
-        const u = queue.pop()!;
-        for (const v of adj[u]) {
-            if (!inPlane.has(v)) {
-                inPlane.add(v);
-                queue.push(v);
+
+    // area-weighted centroid: walk toward any neighbor whose side holds more
+    // than half the total area (BFS subtree sums treat the graph as a tree)
+    const total = area.reduce((s, a) => s + a, 0);
+    let base = area.indexOf(Math.max(...area));
+    for (let guard = 0; guard < count; guard++) {
+        const side = (from: number, into: number): number => {
+            let sum = 0;
+            const seen = new Set([from, into]);
+            const queue = [into];
+            while (queue.length > 0) {
+                const u = queue.pop()!;
+                sum += area[u];
+                for (const v of adj[u]) {
+                    if (!seen.has(v)) {
+                        seen.add(v);
+                        queue.push(v);
+                    }
+                }
             }
-        }
+            return sum;
+        };
+        const heavier = [...adj[base]].find((v) => side(base, v) > total / 2);
+        if (heavier === undefined) break;
+        base = heavier;
     }
+
+    const info = { compOf, base, count };
+    componentCache.set(state, info);
+    return info;
+};
+
+export type HingeWall = { seg: [Vec2, Vec2]; a: number; b: number };
+
+const wallCache = new WeakMap<FoldedState, HingeWall[]>();
+
+/**
+ * Folded-space hinge segments of 3D-opened creases. Material rises out of the
+ * plane exactly along these segments, so for flat folds within an adjacent
+ * component they act as walls that no moved material may cross.
+ */
+export const hingeWallSegments = (state: FoldedState, creases: Crease[] = getCreases(state)): HingeWall[] => {
+    if (state.overrides.length === 0) return [];
+    const cached = wallCache.get(state);
+    if (cached) return cached;
+    const angles = effectiveAngles(state, creases);
+    const walls: HingeWall[] = [];
+    creases.forEach((c, k) => {
+        if (angles[k] === null || angles[k]! >= 180) return;
+        const iso = state.facets[c.a].iso;
+        walls.push({ seg: [applyIso(iso, c.seg[0]), applyIso(iso, c.seg[1])], a: c.a, b: c.b });
+    });
+    wallCache.set(state, walls);
+    return walls;
+};
+
+/** Facets lifted out of the base plane (not in the base flat component). */
+export const outOfPlaneFacets = (state: FoldedState, creases: Crease[] = getCreases(state)): Set<number> => {
+    if (state.overrides.length === 0) return new Set();
+    const { compOf, base } = flatComponentInfo(state, creases);
     const out = new Set<number>();
-    for (let i = 0; i < n; i++) {
-        if (!inPlane.has(i)) out.add(i);
-    }
+    compOf.forEach((c, i) => {
+        if (c !== base) out.add(i);
+    });
     return out;
 };
 

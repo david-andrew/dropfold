@@ -43,6 +43,7 @@ import {
     validateState,
     pointOnSegment
 } from './model';
+import { poseConsistent } from './pose';
 
 export type CompoundFoldParams = {
     grab: Vec2; // folded-plane grab point (on the piece being manipulated)
@@ -164,6 +165,8 @@ const finalize = (
     normalizeLayers(facets);
     const state: FoldedState = { facets, overrides };
     if (validateState(state) !== null) return null;
+    // landed material must not tear when posed with existing 3D overrides
+    if (!poseConsistent(state)) return null;
     return { state, foldLine };
 };
 

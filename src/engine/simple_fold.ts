@@ -33,6 +33,7 @@ import {
     splitPolygon,
     polygonArea,
     polygonsOverlap,
+    segmentPolygonPenetration,
     isMirrored,
     lerp,
     EPS
@@ -44,14 +45,22 @@ import {
     foldedPoly,
     getCreases,
     outOfPlaneFacets,
+    flatComponentInfo,
+    hingeWallSegments,
     normalizeLayers,
     canonicalizeVertices
 } from './model';
+import { poseConsistent } from './pose';
+import { pointInPolygon } from './geometry';
 
 export type SimpleFoldParams = {
-    from: Vec2; // folded-plane grab point (lies on the piece that moves)
-    to: Vec2; // folded-plane target point (grab point reflects onto this)
+    from: Vec2; // grab point in the flat frame of the grabbed component
+    to: Vec2; // target point in the same frame (grab point reflects onto this)
     sign: 1 | -1; // +1: fold over the top (+z), -1: fold underneath (-z)
+    // paper-space grab point: identifies the grabbed facet (and so the flat
+    // component the fold happens in) unambiguously, since paper space never
+    // overlaps; without it the grab defaults to the base component
+    fromPaper?: Vec2;
 };
 
 const MIN_DRAG = 0.05;
@@ -88,12 +97,20 @@ export const simpleFold = (state: FoldedState, params: SimpleFoldParams): Simple
     const n = facets.length;
     const creases = getCreases(state);
 
-    // facets lifted out of the plane by 3D angle overrides are physically
-    // elsewhere: they can't be grabbed, pulled or swept, and a hinged crease
-    // is an obstacle the fold cannot move past
-    const outOfPlane = outOfPlaneFacets(state, creases);
-    const grabIdx = facetAtPoint(state, from, sign, undefined, outOfPlane);
+    // a fold happens within one flat component: facets of other components
+    // are physically in other planes (across 3D hinges), so they can't be
+    // grabbed, pulled or swept, and the hinges are obstacles
+    const { compOf } = flatComponentInfo(state, creases);
+    let grabIdx: number;
+    if (params.fromPaper) {
+        grabIdx = facets.findIndex((f) => pointInPolygon(f.poly, params.fromPaper!));
+    } else {
+        // legacy ops (no fromPaper): prefer the base plane, then lifted components
+        grabIdx = facetAtPoint(state, from, sign, undefined, outOfPlaneFacets(state, creases));
+        if (grabIdx === -1) grabIdx = facetAtPoint(state, from, sign);
+    }
     if (grabIdx === -1) return null;
+    const comp = compOf[grabIdx];
 
     // per-facet derived data
     const folded: Polygon[] = facets.map(foldedPoly);
@@ -125,14 +142,14 @@ export const simpleFold = (state: FoldedState, params: SimpleFoldParams): Simple
             const s1 = applyIso(facets[i].iso, c.seg[1]);
             if (segmentLengthOnPositiveSide(s0, s1, foldLine) > MIN_SEG_LEN) {
                 // the fold would drag material across a 3D hinge: blocked
-                if (outOfPlane.has(j)) return null;
+                if (compOf[j] !== comp) return null;
                 queue.push(j);
             }
         }
 
         // layer sweep: facets stacked beyond the mover in the fold direction
         for (let k = 0; k < n; k++) {
-            if (involved.has(k) || outOfPlane.has(k)) continue;
+            if (involved.has(k) || compOf[k] !== comp) continue;
             if (sign * (facets[k].layer - facets[i].layer) <= 0) continue;
             if (polygonsOverlap(folded[k], movingPieceFolded[i])) {
                 queue.push(k);
@@ -145,10 +162,12 @@ export const simpleFold = (state: FoldedState, params: SimpleFoldParams): Simple
     type Mover = { facet: Facet; origLayer: number };
     const movers: Mover[] = [];
     const stayers: Facet[] = [];
+    const stayerComp: number[] = [];
 
     facets.forEach((f, i) => {
         if (!involved.has(i)) {
             stayers.push({ ...f, poly: f.poly });
+            stayerComp.push(compOf[i]);
             return;
         }
         const { pos, neg } = splitPolygon(f.poly, paperLines[i]);
@@ -162,19 +181,35 @@ export const simpleFold = (state: FoldedState, params: SimpleFoldParams): Simple
         }
         if (stayingPoly) {
             stayers.push({ poly: stayingPoly, iso: f.iso, layer: f.layer });
+            stayerComp.push(compOf[i]);
         }
     });
 
     if (movers.length === 0) return null;
-    // a fold must hinge against stationary paper; otherwise it's just a rigid motion
-    if (stayers.length === 0) return null;
+    // a fold must hinge against stationary paper of its own component;
+    // otherwise it's just a rigid motion (or a 3D rotation about a hinge)
+    if (!stayerComp.includes(comp)) return null;
+
+    const moverFolded = movers.map((m) => foldedPoly(m.facet));
+
+    // 3D-opened hinges bounding this component raise material out of its
+    // plane along their folded segment: a wall that landed material may not
+    // cross (it would pass through the lifted paper). Landing exactly against
+    // the wall is fine. Hinges between other components live in other planes.
+    for (const w of hingeWallSegments(state, creases)) {
+        if ((compOf[w.a] === comp) === (compOf[w.b] === comp)) continue;
+        for (const mp of moverFolded) {
+            if (segmentPolygonPenetration(w.seg[0], w.seg[1], mp, 5e-3) > MIN_SEG_LEN) return null;
+        }
+    }
 
     // ------------------------------------------------------------- layering
     // movers land beyond the fold line; stack them (order reversed) on top of
-    // (sign=+1) or underneath (sign=-1) the stationary facets they overlap
-    const moverFolded = movers.map((m) => foldedPoly(m.facet));
+    // (sign=+1) or underneath (sign=-1) the stationary facets of the same
+    // component they overlap (other components stack in other planes)
     let extreme: number | null = null;
-    stayers.forEach((s) => {
+    stayers.forEach((s, si) => {
+        if (stayerComp[si] !== comp) return;
         const sp = foldedPoly(s);
         const overlaps = moverFolded.some((mp) => polygonsOverlap(sp, mp));
         if (!overlaps) return;
@@ -193,36 +228,69 @@ export const simpleFold = (state: FoldedState, params: SimpleFoldParams): Simple
     canonicalizeVertices(newFacets);
     normalizeLayers(newFacets);
 
+    const newState: FoldedState = { facets: newFacets, overrides: state.overrides };
+    // with 3D overrides present, the landed material may create creases that a
+    // hinge drags (e.g. a new crease collinear with an open hinge) while its
+    // other seams stay put -- reject folds whose result would tear when posed.
+    // clampedSimpleFold turns this rejection into an obstacle: the drag stops
+    // at the furthest tear-free fold.
+    if (!poseConsistent(newState)) return null;
+
     const movedFacets = movers.map((_, k) => stayers.length + k);
     return {
-        state: { facets: newFacets, overrides: state.overrides },
+        state: newState,
         foldLine,
         movedFacets,
         params
     };
 };
 
+// clamp resolution in world units; finer precision accumulates across moves
+// because each move bisects from the previous move's clamped target
+const CLAMP_RES = 0.02;
+
 /**
  * Simple fold with drag clamping: if the target drag point yields an invalid
  * fold, bisect between a known-good drag point and the target to find the
- * furthest valid fold along the way.
+ * furthest valid fold along the way. `lastGood` is the result from the
+ * previous move of the same drag (same state), reused as the known-good
+ * starting point without re-validating it.
  */
 export const clampedSimpleFold = (
     state: FoldedState,
     params: SimpleFoldParams,
-    lastGoodTo: Vec2 | null
+    lastGood: SimpleFoldResult | null
 ): SimpleFoldResult | null => {
     const direct = simpleFold(state, params);
     if (direct) return direct;
-    if (lastGoodTo === null) return null;
+    if (lastGood === null) return null;
 
-    let lo = 0; // lerp(lastGoodTo, to, 0) assumed valid
+    const from = lastGood.params.to;
+    const span = dist(from, params.to);
+    if (span <= CLAMP_RES) return lastGood;
+    let best = lastGood;
+
+    // gallop outward from the known-good point to bracket the obstacle: while
+    // the drag is pinned against it the first small probe fails immediately,
+    // so holding the cursor past an obstacle costs ~1 probe per move instead
+    // of a full bisection
+    let lo = 0;
     let hi = 1;
-    let best: SimpleFoldResult | null = simpleFold(state, { ...params, to: lastGoodTo });
-    if (!best) return null;
-    for (let iter = 0; iter < 10; iter++) {
+    let step = (CLAMP_RES * 2) / span;
+    while (lo + step < 1) {
+        const r = simpleFold(state, { ...params, to: lerp(from, params.to, lo + step) });
+        if (r) {
+            best = r;
+            lo = lo + step;
+            step *= 2;
+        } else {
+            hi = lo + step;
+            break;
+        }
+    }
+    while ((hi - lo) * span > CLAMP_RES) {
         const mid = (lo + hi) / 2;
-        const r = simpleFold(state, { ...params, to: lerp(lastGoodTo, params.to, mid) });
+        const r = simpleFold(state, { ...params, to: lerp(from, params.to, mid) });
         if (r) {
             best = r;
             lo = mid;

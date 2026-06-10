@@ -8,7 +8,7 @@ import { FoldedState, makeInitialState, getCreases, pointOnSegment } from './mod
 import { simpleFold } from './simple_fold';
 import { reverseFold, squashFold, petalFold } from './compound_folds';
 
-export type SimpleFoldOp = { type: 'simple'; from: Vec2; to: Vec2; sign: 1 | -1 };
+export type SimpleFoldOp = { type: 'simple'; from: Vec2; to: Vec2; sign: 1 | -1; fromPaper?: Vec2 };
 export type ReverseFoldOp = { type: 'reverse'; grab: Vec2; to: Vec2; sign: 1 | -1 };
 export type SquashFoldOp = { type: 'squash'; grab: Vec2; to: Vec2; sign: 1 | -1; flip?: boolean };
 export type PetalFoldOp = { type: 'petal'; grab: Vec2; to: Vec2; sign: 1 | -1 };
@@ -19,7 +19,7 @@ export type FoldOp = SimpleFoldOp | ReverseFoldOp | SquashFoldOp | PetalFoldOp |
 export const applyOp = (state: FoldedState, op: FoldOp): FoldedState | null => {
     switch (op.type) {
         case 'simple': {
-            const r = simpleFold(state, { from: op.from, to: op.to, sign: op.sign });
+            const r = simpleFold(state, { from: op.from, to: op.to, sign: op.sign, fromPaper: op.fromPaper });
             return r ? r.state : null;
         }
         case 'reverse': {
@@ -43,7 +43,10 @@ export const setCreaseAngle = (state: FoldedState, point: Vec2, angle: number): 
     // the point must lie on some crease
     const crease = getCreases(state).find((c) => pointOnSegment(point, c.seg));
     if (!crease) return null;
-    // drop any existing override on this crease, then add the new one (180 = flat = no override)
+    // drop any existing override on this crease, then add the new one
+    // (angles are clamped to [-180, 180]; +180 = original flat fold, -180 =
+    // flat on the opposite side, so only +180 clears the override)
+    angle = Math.max(-180, Math.min(180, angle));
     const overrides = state.overrides.filter((o) => !pointOnSegment(o.point, crease.seg));
     if (angle < 180) {
         overrides.push({ point, angle });

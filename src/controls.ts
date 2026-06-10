@@ -41,6 +41,7 @@ export class OrbitalPointer {
     cameraRef: THREE.Camera;
     domElement: HTMLElement;
     controls: OrbitControls;
+    pointerType: 'mouse' | 'touch' | null = null;
     pointer = new THREE.Vector2();
     showPointer: boolean;
     showPlane: boolean;
@@ -137,6 +138,7 @@ export class OrbitalPointer {
         event.preventDefault();
 
         const isTouch = 'touches' in event;
+        this.pointerType = isTouch ? 'touch' : 'mouse';
 
         // alt+drag pans the camera (handled by OrbitControls); don't grab paper
         if (!isTouch && (event as MouseEvent).altKey) return;
@@ -164,7 +166,7 @@ export class OrbitalPointer {
         // Start interacting if an object is intersected
         if (isTouch) {
             // delayed+cancelable call if touch event
-            this.multitouchTimer = setTimeout(() => {
+            this.multitouchTimer = window.setTimeout(() => {
                 this.startInteracting();
                 this.multitouchTimer = null;
             }, this.multitouchDelayMs);

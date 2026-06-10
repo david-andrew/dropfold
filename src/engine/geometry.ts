@@ -207,6 +207,39 @@ export const splitPolygon = (poly: Polygon, l: Line): SplitResult => {
     return { pos, neg };
 };
 
+/**
+ * Length of the portion of segment [a,b] lying strictly inside the convex
+ * polygon, at least `margin` away from its boundary (Cyrus-Beck clipping
+ * against shrunk half-planes). Boundary contact therefore counts as zero.
+ */
+export const segmentPolygonPenetration = (a: Vec2, b: Vec2, poly: Polygon, margin: number): number => {
+    const p = ensureCCW(poly);
+    const d = sub(b, a);
+    let t0 = 0;
+    let t1 = 1;
+    const n = p.length;
+    for (let i = 0; i < n; i++) {
+        const e = sub(p[(i + 1) % n], p[i]);
+        const elen = len(e);
+        if (elen < WELD_EPS) continue;
+        // inside condition shrunk by margin: cross(e, x - p[i]) / |e| >= margin
+        const num = cross(e, sub(a, p[i])) - margin * elen;
+        const den = cross(e, d);
+        if (Math.abs(den) < 1e-12) {
+            if (num < 0) return 0;
+            continue;
+        }
+        const t = -num / den;
+        if (den > 0) {
+            if (t > t0) t0 = t;
+        } else if (t < t1) {
+            t1 = t;
+        }
+        if (t0 >= t1) return 0;
+    }
+    return (t1 - t0) * len(d);
+};
+
 /** Area of overlap between two convex polygons (orientation-insensitive). */
 export const convexOverlapArea = (a: Polygon, b: Polygon): number => {
     let clip = ensureCCW(a);
