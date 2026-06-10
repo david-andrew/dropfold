@@ -39,6 +39,7 @@ type OrbitalPointerProps = {
  */
 export class OrbitalPointer {
     cameraRef: THREE.Camera;
+    domElement: HTMLElement;
     controls: OrbitControls;
     pointer = new THREE.Vector2();
     showPointer: boolean;
@@ -74,6 +75,7 @@ export class OrbitalPointer {
         multitouchDelayMs = 20
     }: OrbitalPointerProps) {
         this.cameraRef = camera;
+        this.domElement = domElement;
         this.controls = new OrbitControls(camera, domElement);
         this.controls.enablePan = enablePan;
         this.showPointer = showPointer;
@@ -130,9 +132,14 @@ export class OrbitalPointer {
     };
 
     onPointerDown = (event: MouseEvent | TouchEvent) => {
+        // only interactions that start on the canvas; leave DOM UI events alone
+        if (event.target !== this.domElement) return;
         event.preventDefault();
 
         const isTouch = 'touches' in event;
+
+        // alt+drag pans the camera (handled by OrbitControls); don't grab paper
+        if (!isTouch && (event as MouseEvent).altKey) return;
 
         // detect if this is a multitouch event (i.e. default to orbit controls)
         if (isTouch && event.touches.length > 1 && this.multitouchTimer !== null) {
