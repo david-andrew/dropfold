@@ -29,10 +29,13 @@ export type PaperObject = {
     facetMeshes: THREE.Mesh[]; // indexed like state.facets
     matrices: THREE.Matrix4[]; // pose transform per facet (paper space -> world)
     layerDirs: THREE.Vector3[]; // world direction of increasing layer per facet
+    // dim every facet not in the set (null restores full colors); used to
+    // emphasize the facets a hovered 3D hinge would move
+    setEmphasis: (moving: Set<number> | null) => void;
     dispose: () => void;
 };
 
-const DEFAULT_THICKNESS = 0.005;
+const DEFAULT_THICKNESS = 0.0025;
 
 export const buildPaperObject = (state: FoldedState, style: PaperStyle): PaperObject => {
     const group = new THREE.Group();
@@ -113,11 +116,32 @@ export const buildPaperObject = (state: FoldedState, style: PaperStyle): PaperOb
         group.add(new THREE.Mesh(geometry, ribbonMat));
     }
 
+    const dimColor = (c: string) => '#' + new THREE.Color(c).multiplyScalar(0.3).getHexString();
+    let dimPair: THREE.Material[] | null = null;
+    const setEmphasis = (moving: Set<number> | null) => {
+        if (moving !== null && !dimPair) {
+            dimPair = [
+                makePatternMaterial(
+                    style.frontPattern,
+                    dimColor(style.frontColor0),
+                    dimColor(style.frontColor1),
+                    THREE.FrontSide
+                ),
+                makePatternMaterial(style.backPattern, dimColor(style.backColor0), dimColor(style.backColor1), THREE.BackSide)
+            ];
+            disposables.push(...dimPair);
+        }
+        facetMeshes.forEach((mesh, i) => {
+            mesh.material = moving === null || moving.has(i) ? [frontMat, backMat] : dimPair!;
+        });
+    };
+
     return {
         group,
         facetMeshes,
         matrices,
         layerDirs,
+        setEmphasis,
         dispose: () => disposables.forEach((d) => d.dispose())
     };
 };

@@ -123,6 +123,15 @@ export const computePose = (state: FoldedState, thickness: number): PoseResult =
 
     const matrices: THREE.Matrix4[] = new Array(n);
     const thicknessFrames: THREE.Matrix4[] = new Array(n);
+    // world direction of increasing layer per facet (+z carried through the
+    // beta-clamped hinges, so it flips to the far side past -0 degrees)
+    const layerDirs: THREE.Vector3[] = new Array(n);
+    // for facets entered through a hinged tree edge: the world direction of
+    // the fold's bisector (half-angle, unclamped so -180 wraps below) and the
+    // parent facet; the thickness seam steps across the hinge along this
+    // direction so both sides of the fold splay symmetrically like a spine
+    const hingeStep: (THREE.Vector3 | null)[] = new Array(n).fill(null);
+    const hingeFrom: number[] = new Array(n).fill(-1);
     const visited = new Array(n).fill(false);
 
     const visit = (u: number) => {
@@ -163,39 +172,93 @@ export const computePose = (state: FoldedState, thickness: number): PoseResult =
                 // rotation acts in u's flat frame: P(v) = P(u) * flat(u)^-1 * rot * flat(v)
                 local = flat[u].clone().invert().multiply(rot).multiply(flat[v]);
                 localThickness = flat[u].clone().invert().multiply(rotThickness).multiply(flat[v]);
+                const half = new THREE.Matrix4().makeRotationAxis(axis, alpha / 2);
+                hingeStep[v] = new THREE.Vector3(0, 0, 1).transformDirection(
+                    thicknessFrames[u].clone().multiply(flat[u].clone().invert()).multiply(half)
+                );
+                hingeFrom[v] = u;
             }
             matrices[v] = matrices[u].clone().multiply(local);
             thicknessFrames[v] = thicknessFrames[u].clone().multiply(localThickness);
+            // isometries preserve z, so this is +z rotated by the hinges on the path
+            layerDirs[v] = new THREE.Vector3(0, 0, 1).transformDirection(thicknessFrames[v]);
             visit(v);
         }
     };
 
     matrices[root] = flat[root].clone();
     thicknessFrames[root] = flat[root].clone();
+    layerDirs[root] = new THREE.Vector3(0, 0, 1);
     visit(root);
     // disconnected facets (shouldn't happen for real paper) fall back to flat pose
     for (let i = 0; i < n; i++) {
         if (!visited[i]) {
             matrices[i] = flat[i];
-            thicknessFrames[i] = flat[i];
+            layerDirs[i] = new THREE.Vector3(0, 0, 1);
+        }
+    }
+
+    // Thickness placement: facet i sits at anchor(comp) + layer * t * layerDir.
+    // Every facet of a rigid component shares one anchor, so stacking inside a
+    // packet is exact (seam gap = |layer delta| * t) no matter how many hinge
+    // creases enter it -- per-tree-path offsets would anchor each subtree at a
+    // different parent layer and shear the packet apart. The anchor continues
+    // each sheet from its parent-side height, stepping across the hinge along
+    // the fold's bisector so the thickness opens symmetrically (a book spine,
+    // not one cover pivoting on the other's edge): a hinge (u in p, v in c)
+    // wants
+    //   A_c + Lv*t*z_c = (A_p + Lu*t*z_p) + (Lv - Lu)*t*m
+    // with m the bisector direction; averaged over all hinges into c.
+    const nComp = compOf.reduce((m, c) => Math.max(m, c), 0) + 1;
+    const compDir: THREE.Vector3[] = new Array(nComp);
+    for (let i = 0; i < n; i++) compDir[compOf[i]] = layerDirs[i];
+    const anchors: (THREE.Vector3 | null)[] = new Array(nComp).fill(null);
+    anchors[base] = new THREE.Vector3();
+    const queue = [base];
+    while (queue.length) {
+        const p = queue.shift()!;
+        const acc = new Map<number, { lu: number; lv: number; count: number }>();
+        creases.forEach((c, k) => {
+            const a = angles[k];
+            if (a === null || a >= 180) return;
+            for (const [u, v] of [
+                [c.a, c.b],
+                [c.b, c.a]
+            ]) {
+                if (compOf[u] !== p || compOf[v] === p || anchors[compOf[v]] !== null) continue;
+                const e = acc.get(compOf[v]) ?? { lu: 0, lv: 0, count: 0 };
+                e.lu += state.facets[u].layer;
+                e.lv += state.facets[v].layer;
+                e.count++;
+                acc.set(compOf[v], e);
+            }
+        });
+        for (const [child, { lu, lv, count }] of acc) {
+            const mLu = (lu / count) * thickness;
+            const mLv = (lv / count) * thickness;
+            let step: THREE.Vector3 | null = null;
+            for (let i = 0; i < n && !step; i++) {
+                if (compOf[i] === child && hingeStep[i] && compOf[hingeFrom[i]] === p) step = hingeStep[i];
+            }
+            anchors[child] = anchors[p]!.clone()
+                .addScaledVector(compDir[p], mLu)
+                .addScaledVector(step ?? compDir[child], mLv - mLu)
+                .addScaledVector(compDir[child], -mLv);
+            queue.push(child);
         }
     }
 
     const finalMatrices = matrices.map((m, i) => {
         if (thickness === 0) return m;
-        const depth = state.facets[i].layer * thickness;
-        const a = new THREE.Vector3(0, 0, 0).applyMatrix4(thicknessFrames[i]);
-        const b = new THREE.Vector3(0, 0, depth).applyMatrix4(thicknessFrames[i]);
+        const off = (anchors[compOf[i]] ?? new THREE.Vector3())
+            .clone()
+            .addScaledVector(layerDirs[i], state.facets[i].layer * thickness);
         const out = m.clone();
-        out.elements[12] += b.x - a.x;
-        out.elements[13] += b.y - a.y;
-        out.elements[14] += b.z - a.z;
+        out.elements[12] += off.x;
+        out.elements[13] += off.y;
+        out.elements[14] += off.z;
         return out;
     });
-
-    // isometries preserve z, so this is +z rotated by the hinges along the
-    // thickness path (the side new layers physically stack on)
-    const layerDirs = thicknessFrames.map((f) => new THREE.Vector3(0, 0, 1).transformDirection(f));
 
     return { matrices: finalMatrices, layerDirs, creases };
 };

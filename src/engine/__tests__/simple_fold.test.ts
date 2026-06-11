@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { makeInitialState, FoldedState, foldedPoly, getCreases, totalArea, maxLayer } from '../model';
-import { simpleFold } from '../simple_fold';
-import { Vec2, polygonArea, polygonsOverlap, applyIso, dist } from '../geometry';
+import { makeInitialState, FoldedState, foldedPoly, getCreases, totalArea, maxLayer, flatComponentInfo } from '../model';
+import { simpleFold, clampedSimpleFold } from '../simple_fold';
+import { applyOp, FoldOp } from '../ops';
+import { Vec2, polygonArea, polygonsOverlap, applyIso, dist, polygonCentroid } from '../geometry';
 
 const unitSquare: Vec2[] = [
     [-1, -1],
@@ -223,3 +224,92 @@ describe('multi-layer participation', () => {
         // just confirm validity.
     });
 });
+
+describe('micro-creases from vertex welding', () => {
+    // a half-folded sheet opened into a tent, then folded a few more times:
+    // several fold lines converge at the tent's apex, where vertex welding
+    // produces ~2e-3-length shared boundary slivers between facets on
+    // opposite sides of the open hinge (from a real session save)
+    const ops: FoldOp[] = [
+        {
+            type: 'simple',
+            from: [-5, 1.5601695478456996],
+            to: [5.987913292569809, 1.5078733618843911],
+            sign: 1,
+            fromPaper: [-4.995, 1.5586093782978538]
+        },
+        { type: 'angle', point: [0.4866555810929807, 0], angle: 28 },
+        {
+            type: 'simple',
+            from: [6.008148277637343, 3.6336041472635756],
+            to: [1.855463323852442, -0.49132426581005273],
+            sign: -1,
+            fromPaper: [-4.99725665500699, 3.682317872340145]
+        },
+        {
+            type: 'simple',
+            from: [4.419027713730558, 5],
+            to: [0.49140506769171866, 1.0943341045021742],
+            sign: 1,
+            fromPaper: [4.417351992895167, 4.994991212303077]
+        },
+        {
+            type: 'simple',
+            from: [4.419126608684605, 1.0722161851553542],
+            to: [0.4822403373286169, -0.5382778329005308],
+            sign: 1,
+            fromPaper: [4.418211915557711, 1.0746399947228487]
+        }
+    ];
+    const square10: Vec2[] = [
+        [-5, -5],
+        [5, -5],
+        [5, 5],
+        [-5, 5]
+    ];
+    let state = makeInitialState(square10);
+    for (const op of ops) state = applyOp(state, op)!;
+    // the open hinge lies along paper x ~ 0.49
+    const HINGE_X = 0.49;
+
+    it('does not merge the hinge halves through a point contact', () => {
+        const creases = getCreases(state);
+        for (const c of creases) expect(dist(c.seg[0], c.seg[1])).toBeGreaterThan(1e-2);
+        const { compOf } = flatComponentInfo(state, creases);
+        const sides = new Map<number, Set<boolean>>();
+        compOf.forEach((comp, i) => {
+            if (!sides.has(comp)) sides.set(comp, new Set());
+            sides.get(comp)!.add(polygonCentroid(state.facets[i].poly)[0] < HINGE_X);
+        });
+        // no flat component spans both sides of the open hinge
+        for (const s of sides.values()) expect(s.size).toBe(1);
+    });
+
+    it('clamps a wing fold at the hinge wall instead of mirroring past it', () => {
+        // the recorded drag pushed the wing's far corner well past the ridge;
+        // it must clamp at the wall and move only grabbed-side material
+        const params = {
+            from: [4.461089260921553, -0.4839961881275668] as Vec2,
+            to: [0.5204653365155769, -1.1580453416915297] as Vec2,
+            sign: -1 as const,
+            fromPaper: [-4.998168368870201, 1.0824708549031299] as Vec2
+        };
+        expect(simpleFold(state, params)).toBeNull(); // full drag crosses the wall
+        let best = null;
+        for (let t = 0.1; t <= 1 && !best; t += 0.1) {
+            best = clampedSimpleFold(state, { ...params, to: lerpPt(params.from, params.to, t) }, best);
+        }
+        best = clampedSimpleFold(state, params, best);
+        expect(best).not.toBeNull();
+        const rightIsos = new Set(
+            state.facets.filter((f) => polygonCentroid(f.poly)[0] >= HINGE_X).map((f) => JSON.stringify(f.iso))
+        );
+        for (const f of best!.state.facets) {
+            if (polygonCentroid(f.poly)[0] >= HINGE_X) {
+                expect(rightIsos.has(JSON.stringify(f.iso))).toBe(true);
+            }
+        }
+    });
+});
+
+const lerpPt = (a: Vec2, b: Vec2, t: number): Vec2 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];

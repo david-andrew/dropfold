@@ -21,7 +21,7 @@ import {
 } from './engine/model';
 import { clampedSimpleFold, SimpleFoldResult } from './engine/simple_fold';
 import { FoldOp, applyOp } from './engine/ops';
-import { canOpenCrease } from './engine/pose';
+import { canOpenCrease, computePose } from './engine/pose';
 import { OrbitalPointer } from './controls';
 import { buildPaperObject, PaperObject, PaperStyle, stateRadius } from './render/paper_mesh';
 import { PatternId } from './render/materials';
@@ -51,17 +51,17 @@ type Snapshot = {
 };
 
 export const DEFAULT_CONFIG: PaperConfig = {
-    shape: 'square',
-    size: 10,
+    shape: 'letter',
+    size: 11,
     style: {
         frontPattern: 'seigaiha',
         frontColor0: '#87ceeb',
         frontColor1: '#ffffff',
-        backPattern: 'plain',
+        backPattern: 'dots',
         backColor0: '#f5efdf',
         backColor1: '#ffffff',
         edgeColor: '#222222',
-        thickness: 0.005
+        thickness: 0.0025
     },
     background: '#1a1d24'
 };
@@ -107,6 +107,7 @@ export class App {
     private touch3DArmed = false;
     private hover: { crease: Crease; facetIdx: number } | null = null;
     private lockCache = new Map<string, boolean>(); // per-crease tear check, valid for the current committed state
+    private moverCache = new Map<string, Set<number>>(); // per-crease "which facets would swing", same lifetime
     private highlightLine!: Line2;
     private highlightMat!: LineMaterial;
     private angleDrag: {
@@ -117,7 +118,17 @@ export class App {
         startNDC: THREE.Vector2;
         dirNDC: THREE.Vector2; // unit NDC direction from the press point toward the crease
         degPerNDC: number; // dragging all the way to the crease opens the fold by 90 degrees
+        movers: Set<number>; // facets swinging with this hinge, kept emphasized during the drag
+        anchorIdx: number; // facet across the crease from the grab, held fixed on screen
+        anchorMatrix: THREE.Matrix4; // its world transform at drag start
     } | null = null;
+
+    // The pose solver anchors the largest component, which is not necessarily
+    // the side the user grabbed. Angle drags pin the non-grabbed side of the
+    // crease on screen instead; the residual rigid transform is folded into
+    // viewAlign on commit so the model doesn't snap back to the canonical pose.
+    private viewAlign = new THREE.Matrix4();
+    private pendingAlign: THREE.Matrix4 | null = null;
 
     onChange: () => void = () => {}; // UI refresh hook (mode/status/buttons)
     onSync: () => void = () => {}; // UI hook to mirror restored config + name back into the inputs
@@ -189,8 +200,16 @@ export class App {
 
     private buildObject = (state: FoldedState): PaperObject => {
         const obj = buildPaperObject(state, this.config.style);
+        this.alignObject(obj, this.viewAlign);
         this.scene.add(obj.group);
         return obj;
+    };
+
+    /** Rigidly transform a built object, keeping its exposed matrices consistent. */
+    private alignObject = (obj: PaperObject, m: THREE.Matrix4) => {
+        obj.group.applyMatrix4(m);
+        for (const mat of obj.matrices) mat.premultiply(m);
+        for (const d of obj.layerDirs) d.transformDirection(m);
     };
 
     private removeObject = (obj: PaperObject | null) => {
@@ -201,12 +220,14 @@ export class App {
 
     /** Rebuild the visible committed object. */
     rebuild = () => {
+        if (this.ops.length === 0) this.viewAlign.identity();
         this.removeObject(this.paperObj);
         this.removeObject(this.previewObj);
         this.previewObj = null;
         this.paperObj = this.buildObject(this.committed);
         this.meshToFacet = new Map(this.paperObj.facetMeshes.map((m, i) => [m, i]));
         this.lockCache.clear();
+        this.moverCache.clear();
         if (this.ctrlDown && !this.angleDrag) this.updateHover(this.currentHoverPointer());
         this.onChange();
     };
@@ -366,8 +387,12 @@ export class App {
         const wasTouchSelecting = this.touch3DSelecting;
         const selectedHover = wasTouchSelecting && !wasAngleDrag ? this.hover : null;
         if (this.lastGoodOp && this.lastGoodState) {
+            // keep the anchored side where the drag left it: the committed
+            // rebuild would otherwise snap back to the canonical pose root
+            if (this.pendingAlign) this.viewAlign.premultiply(this.pendingAlign);
             this.commitOp(this.lastGoodOp, this.lastGoodState);
         }
+        this.pendingAlign = null;
         this.dragFrom = null;
         this.dragFromPaper = null;
         this.dragInv = null;
@@ -467,9 +492,11 @@ export class App {
         this.highlightLine.visible = true;
     };
 
+    private creaseKey = (crease: Crease): string => `${crease.a},${crease.b}:${crease.seg[0]}:${crease.seg[1]}`;
+
     /** Would hinging this crease tear the paper? Cached for the committed state. */
     private isCreaseLocked = (crease: Crease): boolean => {
-        const key = `${crease.a},${crease.b}:${crease.seg[0]}:${crease.seg[1]}`;
+        const key = this.creaseKey(crease);
         let locked = this.lockCache.get(key);
         if (locked === undefined) {
             locked = !canOpenCrease(this.committed, crease);
@@ -478,19 +505,58 @@ export class App {
         return locked;
     };
 
+    /**
+     * Facets that would swing if this crease's angle changed, measured
+     * relative to the side of the crease away from the pointed facet (the
+     * side an angle drag holds fixed). Probes a nearby angle and compares
+     * poses. Cached for the committed state.
+     */
+    private creaseMovers = (crease: Crease, facetIdx: number): Set<number> => {
+        const anchorIdx = crease.a === facetIdx ? crease.b : crease.a;
+        const key = `${anchorIdx}|${this.creaseKey(crease)}`;
+        let movers = this.moverCache.get(key);
+        if (!movers) {
+            movers = new Set<number>();
+            const current = findOverride(this.committed, crease)?.angle ?? 180;
+            const probe = current > 0 ? current - 47 : current + 47;
+            const next = applyOp(this.committed, { type: 'angle', point: creaseKeyPoint(crease), angle: probe });
+            if (next) {
+                const a = computePose(this.committed, 0).matrices;
+                const b = computePose(next, 0).matrices;
+                // re-anchor the probe pose on the fixed side, so which facets
+                // "move" doesn't depend on the solver's canonical root choice
+                const align = a[anchorIdx].clone().multiply(b[anchorIdx].clone().invert());
+                const v = new THREE.Vector3();
+                const w = new THREE.Vector3();
+                this.committed.facets.forEach((f, i) => {
+                    const c = polygonCentroid(f.poly);
+                    v.set(c[0], c[1], 0).applyMatrix4(a[i]);
+                    w.set(c[0], c[1], 0).applyMatrix4(b[i]).applyMatrix4(align);
+                    if (v.distanceTo(w) > 1e-3) movers!.add(i);
+                });
+            }
+            this.moverCache.set(key, movers);
+        }
+        return movers;
+    };
+
     private updateHover = (pointer: THREE.Vector2 = this.lastPointer) => {
         this.hover = this.pickCrease(pointer);
         if (this.hover && this.paperObj) {
-            this.highlightMat.color.set(this.isCreaseLocked(this.hover.crease) ? 0xff4d4d : 0xffc83d);
+            const locked = this.isCreaseLocked(this.hover.crease);
+            this.highlightMat.color.set(locked ? 0xff4d4d : 0xffc83d);
             this.setHighlight(this.hover.crease.seg, this.paperObj.matrices[this.hover.facetIdx]);
+            this.paperObj.setEmphasis(locked ? null : this.creaseMovers(this.hover.crease, this.hover.facetIdx));
         } else {
             this.setHighlight(null);
+            this.paperObj?.setEmphasis(null);
         }
     };
 
     private clearHover = () => {
         this.hover = null;
         this.setHighlight(null);
+        this.paperObj?.setEmphasis(null);
     };
 
     private startAngleDrag = () => {
@@ -508,6 +574,7 @@ export class App {
         const startNDC = this.controls.pointer.clone();
         const toCrease = new THREE.Vector2(mid.x, mid.y).sub(startNDC);
         const span = Math.max(toCrease.length(), 0.02);
+        const anchorIdx = crease.a === facetIdx ? crease.b : crease.a;
         this.angleDrag = {
             crease,
             facetIdx,
@@ -515,7 +582,10 @@ export class App {
             baseAngle: findOverride(this.committed, crease)?.angle ?? 180,
             startNDC,
             dirNDC: toCrease.normalize(),
-            degPerNDC: 90 / span
+            degPerNDC: 90 / span,
+            movers: this.creaseMovers(crease, facetIdx),
+            anchorIdx,
+            anchorMatrix: this.paperObj.matrices[anchorIdx].clone()
         };
     };
 
@@ -529,7 +599,13 @@ export class App {
         this.lastGoodOp = op;
         this.lastGoodState = next;
         this.showPreview(next);
+        // hold the non-grabbed side where it was, so the grabbed side is the
+        // one that visibly swings regardless of the solver's root choice
+        const delta = drag.anchorMatrix.clone().multiply(this.previewObj!.matrices[drag.anchorIdx].clone().invert());
+        this.alignObject(this.previewObj!, delta);
+        this.pendingAlign = delta;
         this.setHighlight(drag.crease.seg, this.previewObj!.matrices[drag.facetIdx]);
+        this.previewObj!.setEmphasis(drag.movers);
     };
 
     // ------------------------------------------------------------- keyboard
@@ -628,14 +704,14 @@ export class App {
         this.onChange();
     };
 
-    private restore = () => {
+    private restore = (preserveCamera = false) => {
         const snap = this.history[this.historyIndex];
         this.config = structuredClone(snap.config);
         this.ops = structuredClone(snap.ops);
         this.modelName = snap.name;
         this.scene.background = new THREE.Color(this.config.background);
         this.committed = this.replayAll();
-        this.frameCamera();
+        if (!preserveCamera) this.frameCamera();
         this.rebuild();
         this.onSync();
     };
@@ -662,13 +738,13 @@ export class App {
     undo = () => {
         if (!this.canUndo()) return;
         this.historyIndex--;
-        this.restore();
+        this.restore(true);
     };
 
     redo = () => {
         if (!this.canRedo()) return;
         this.historyIndex++;
-        this.restore();
+        this.restore(true);
     };
 
     /** Live style preview (no history step); geometry assumed unchanged. */
@@ -761,6 +837,7 @@ export class App {
             this.ops.push(op);
         }
         this.committed = state;
+        this.viewAlign.identity();
         this.frameCamera();
         this.rebuild();
         this.record(); // a load is its own undoable step

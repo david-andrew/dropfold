@@ -167,7 +167,7 @@ export const buildUI = (app: App) => {
         backC0.value = c.style.backColor0;
         backC1.value = c.style.backColor1;
         bgColor.value = c.background;
-        thickInput.value = String(c.style.thickness ?? 0.005);
+        thickInput.value = String(c.style.thickness ?? 0.0025);
     };
 
     // style edits preview live and commit one history step on release;

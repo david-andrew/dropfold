@@ -66,6 +66,10 @@ export const facetFaceUp = (f: Facet): boolean => !isMirrored(f.iso);
 // built, and drag clamping re-derives creases for the same state many times
 const creaseCache = new WeakMap<Facet[], Crease[]>();
 
+// shortest shared boundary that counts as a crease; well above vertex-weld
+// drift (2e-3) and far below any meaningful fold feature
+const MIN_CREASE_LEN = 2e-2;
+
 /** All creases, derived from paper-space adjacency. */
 export const getCreases = (state: FoldedState): Crease[] => {
     const cached = creaseCache.get(state.facets);
@@ -93,6 +97,10 @@ export const getCreases = (state: FoldedState): Crease[] => {
             if (bi.y1 < bj.y0 - margin || bj.y1 < bi.y0 - margin) continue;
             const segs = sharedBoundarySegments(state.facets[i].poly, state.facets[j].poly);
             for (const seg of segs) {
+                // near-point contacts (vertex-weld noise where many fold lines
+                // converge) are not physical creases: they must not connect
+                // components, pull neighbors, or route the pose tree
+                if (dist(seg[0], seg[1]) < MIN_CREASE_LEN) continue;
                 out.push({ a: i, b: j, seg });
             }
         }
@@ -121,17 +129,22 @@ export const creaseKeyPoint = (crease: Crease): Vec2 => midpoint(crease.seg[0], 
  * Effective fold angle per crease: a crease's own override, or one inherited
  * from an overridden crease stacked on the same folded line -- layers folded
  * across a common hinge line physically open together.
+ *
+ * Inheritance requires being wrapped into the same packet, not mere
+ * collinearity: the crease must connect the same pair of rigid components as
+ * the overridden crease. Creases that just happen to land on the line (a fold
+ * clamped against a hinge wall, a mirrored stack's twin sheet, or a flap
+ * tucked under the opposite face) are independent hinges and stay flat.
  */
 export const effectiveAngles = (state: FoldedState, creases: Crease[]): (number | null)[] => {
-    const angles: (number | null)[] = creases.map((c) => findOverride(state, c)?.angle ?? null);
-    if (state.overrides.length === 0) return angles;
+    const own: (number | null)[] = creases.map((c) => findOverride(state, c)?.angle ?? null);
+    if (state.overrides.length === 0) return own;
     const m = creases.length;
     const segs = creases.map((c): [Vec2, Vec2] => [
         applyIso(state.facets[c.a].iso, c.seg[0]),
         applyIso(state.facets[c.a].iso, c.seg[1])
     ]);
-    // union creases that overlap on a common folded line; angles spread through
-    // chains of overlap, so components inherit any member's override
+    // union creases that overlap on a common folded line (chains of overlap)
     const parent = Array.from({ length: m }, (_, i) => i);
     const find = (x: number): number => {
         while (parent[x] !== x) {
@@ -148,14 +161,41 @@ export const effectiveAngles = (state: FoldedState, creases: Crease[]): (number 
             }
         }
     }
-    const componentAngle = new Map<number, number>();
-    for (let i = 0; i < m; i++) {
-        if (angles[i] !== null) componentAngle.set(find(i), angles[i]!);
-    }
-    for (let i = 0; i < m; i++) {
-        if (angles[i] === null) {
-            angles[i] = componentAngle.get(find(i)) ?? null;
+
+    // provisional rigid components, treating every line-group member as hinged
+    // (a packet member is flat-connected to the overridden crease's facets
+    // elsewhere, so it spans the same component pair; an incidental flap is
+    // its own provisional component and matches nothing)
+    const n = state.facets.length;
+    const fparent = Array.from({ length: n }, (_, i) => i);
+    const ffind = (x: number): number => {
+        while (fparent[x] !== x) {
+            fparent[x] = fparent[fparent[x]];
+            x = fparent[x];
         }
+        return x;
+    };
+    const groupHasOverride = new Set<number>();
+    for (let i = 0; i < m; i++) {
+        if (own[i] !== null && own[i]! < 180) groupHasOverride.add(find(i));
+    }
+    creases.forEach((c, k) => {
+        const hinged = groupHasOverride.has(find(k)) && !(own[k] !== null && own[k]! >= 180);
+        if (!hinged) fparent[ffind(c.a)] = ffind(c.b);
+    });
+
+    const pairKey = (k: number) => {
+        const a = ffind(creases[k].a);
+        const b = ffind(creases[k].b);
+        return `${find(k)}:${Math.min(a, b)},${Math.max(a, b)}`;
+    };
+    const packetAngle = new Map<string, number>();
+    for (let i = 0; i < m; i++) {
+        if (own[i] !== null && own[i]! < 180) packetAngle.set(pairKey(i), own[i]!);
+    }
+    const angles = own.slice();
+    for (let i = 0; i < m; i++) {
+        if (angles[i] === null) angles[i] = packetAngle.get(pairKey(i)) ?? null;
     }
     return angles;
 };
