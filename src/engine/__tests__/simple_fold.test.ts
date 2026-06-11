@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { makeInitialState, FoldedState, foldedPoly, getCreases, totalArea, maxLayer, flatComponentInfo } from '../model';
 import { simpleFold, clampedSimpleFold } from '../simple_fold';
 import { applyOp, FoldOp } from '../ops';
+import { canOpenCrease } from '../pose';
 import { Vec2, polygonArea, polygonsOverlap, applyIso, dist, polygonCentroid } from '../geometry';
 
 const unitSquare: Vec2[] = [
@@ -313,3 +314,101 @@ describe('micro-creases from vertex welding', () => {
 });
 
 const lerpPt = (a: Vec2, b: Vec2, t: number): Vec2 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+
+describe('sliver facets from grazing fold lines', () => {
+    // paper airplane on letter paper (from a real session save): the slightly
+    // off-vertical centerline fold grazes the top paper edge, which used to
+    // split off a hair-thin facet whose sliver creases rigidly pinned distant
+    // layers together -- locking every hinge (the wings showed red and could
+    // not be opened into 3D)
+    const letter: Vec2[] = [
+        [-4.25, -5.5],
+        [4.25, -5.5],
+        [4.25, 5.5],
+        [-4.25, 5.5]
+    ];
+    const ops: FoldOp[] = [
+        {
+            type: 'simple',
+            from: [4.25, 4.999563231635957],
+            to: [0.29025288359894286, 1.024348463240104],
+            sign: -1,
+            fromPaper: [4.24575, 4.994563668404321]
+        },
+        {
+            type: 'simple',
+            from: [-4.25, 4.986312691604159],
+            to: [-0.36238141971415105, 1.0526460212555193],
+            sign: -1,
+            fromPaper: [-4.24607970199119, 4.980846523130601]
+        },
+        {
+            type: 'simple',
+            from: [0.178366534572826, 3.347672401551793],
+            to: [0.16535030691438024, -1.2957739371567651],
+            sign: -1,
+            fromPaper: [-1.9495952841252056, 5.498526204602346]
+        },
+        {
+            type: 'simple',
+            from: [3.5102082054751724, 1.0165913721875128],
+            to: [0.16518202058209977, -1.5027055323187297],
+            sign: -1,
+            fromPaper: [3.5066823480537295, 1.0180212680468004]
+        },
+        {
+            type: 'simple',
+            from: [-3.921481922628791, 1.0374234360337222],
+            to: [-0.09641297934103822, -1.9675252795604572],
+            sign: -1,
+            fromPaper: [-3.9181210629901297, 1.0390029940453789]
+        },
+        {
+            type: 'simple',
+            from: [0.27605213272513884, -2.9249570339086035],
+            to: [0.30194054561562866, -2.138029414937756],
+            sign: -1,
+            fromPaper: [0.2979026405412545, 4.974121034490732]
+        },
+        {
+            type: 'simple',
+            from: [3.4363018150099354, -2.36562598725086],
+            to: [-3.5887318098036705, -2.3910093175454588],
+            sign: 1,
+            fromPaper: [3.432853540410658, -2.366158555031436]
+        },
+        {
+            type: 'simple',
+            from: [-2.9284785625681033, -1.5010393945507599],
+            to: [0.96608896564869, -2.0569453204624044],
+            sign: 1,
+            fromPaper: [2.7699926735130895, -1.4794393172404925]
+        },
+        {
+            type: 'simple',
+            from: [-2.7936124309886337, -2.962868138460631],
+            to: [0.5431375787811419, -3.439197206120757],
+            sign: -1,
+            fromPaper: [-4.248860733130256, -1.8173393420964545]
+        }
+    ];
+
+    it('replays without hair facets and leaves the wing hinges openable', () => {
+        let state = makeInitialState(letter);
+        ops.forEach((op, oi) => {
+            const next = applyOp(state, op);
+            expect(next, `op ${oi} must replay`).not.toBeNull();
+            state = next!;
+        });
+        // no hair-thin facets (the grazed-off sliver had area ~0.0016)
+        for (const f of state.facets) {
+            expect(Math.abs(polygonArea(f.poly))).toBeGreaterThan(0.005);
+        }
+        // the centerline and both wing folds (the longest creases) must hinge
+        const creases = getCreases(state);
+        const longest = [...creases].sort((a, b) => dist(b.seg[0], b.seg[1]) - dist(a.seg[0], a.seg[1])).slice(0, 5);
+        for (const c of longest) {
+            expect(canOpenCrease(state, c), `crease ${c.a}-${c.b}`).toBe(true);
+        }
+    });
+});

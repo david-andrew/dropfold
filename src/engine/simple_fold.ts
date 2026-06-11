@@ -67,6 +67,10 @@ const MIN_DRAG = 0.05;
 // minimum length of shared crease on the moving side to count as a pull;
 // generous enough to ignore vertex-grazing drift from welded coordinates
 const MIN_SEG_LEN = 1e-2;
+// a fold line grazing a facet closer than this doesn't split it: hair-thin
+// remainder pieces become degenerate facets whose sliver creases rigidly pin
+// distant layers together, locking every hinge in the model
+const SLIVER = 0.05;
 
 /** Portion of folded-space segment strictly on the positive side of L, as a length. */
 const segmentLengthOnPositiveSide = (a: Vec2, b: Vec2, l: Line): number => {
@@ -119,7 +123,13 @@ export const simpleFold = (state: FoldedState, params: SimpleFoldParams): Simple
     const paperSide: (1 | -1)[] = facets.map((f) => (isMirrored(f.iso) ? -1 : 1));
     // moving piece of each facet, in paper space (may be empty)
     const movingPiece: Polygon[] = facets.map((f, i) => clipPolygon(f.poly, paperLines[i], paperSide[i]));
-    const hasMovingArea = (i: number) => movingPiece[i].length >= 3 && Math.abs(polygonArea(movingPiece[i])) > 1e-4;
+    // how far a piece extends from the fold line toward the given side
+    const extentBeyond = (poly: Polygon, line: Line, side: 1 | -1): number =>
+        poly.reduce((m, p) => Math.max(m, side * signedDist(line, p)), 0);
+    const hasMovingArea = (i: number) =>
+        movingPiece[i].length >= 3 &&
+        Math.abs(polygonArea(movingPiece[i])) > 1e-4 &&
+        extentBeyond(movingPiece[i], paperLines[i], paperSide[i]) > SLIVER;
     const movingPieceFolded: Polygon[] = facets.map((f, i) => movingPiece[i].map((p) => applyIso(f.iso, p)));
 
     if (!hasMovingArea(grabIdx)) return null;
@@ -171,8 +181,14 @@ export const simpleFold = (state: FoldedState, params: SimpleFoldParams): Simple
             return;
         }
         const { pos, neg } = splitPolygon(f.poly, paperLines[i]);
-        const movingPoly = paperSide[i] === 1 ? pos : neg;
-        const stayingPoly = paperSide[i] === 1 ? neg : pos;
+        let movingPoly = paperSide[i] === 1 ? pos : neg;
+        let stayingPoly = paperSide[i] === 1 ? neg : pos;
+        // the staying remainder is a hair along the fold line: take the whole
+        // facet instead of leaving a degenerate sliver behind
+        if (stayingPoly && extentBeyond(stayingPoly, paperLines[i], -paperSide[i] as 1 | -1) < SLIVER) {
+            movingPoly = f.poly;
+            stayingPoly = null;
+        }
         if (movingPoly) {
             movers.push({
                 facet: { poly: movingPoly, iso: composeIso(reflection, f.iso), layer: f.layer },
